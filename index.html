@@ -1,0 +1,2613 @@
+<!DOCTYPE html>
+<html lang="pt-BR" data-theme="dark">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Prumo Estratégico — IA para Arquitetos (Protótipo)</title>
+  
+  <!-- Google Fonts: Playfair Display & Plus Jakarta Sans -->
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,600;0,700;1,400&family=Plus+Jakarta+Sans:wght@400;500;600;700&display=swap">
+  
+  <!-- Basecoat CSS & Fixed Shell -->
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/basecoat-css@1.0.2/dist/basecoat.cdn.min.css">
+  <style>
+/* Skip artifact shell — fixed styles served beside every artifact.
+   Complements basecoat; artifacts override --accent for their own identity. */
+:root {
+  color-scheme: light dark;
+  --accent: #2563eb;
+  --accent-contrast: #ffffff;
+  --accent-text: color-mix(in srgb, var(--accent) 72%, #000);
+  --bg: #f8f9fb;
+  --surface: #ffffff;
+  --text: #14171f;
+  --text-muted: #5b6472;
+  --border: rgba(20, 23, 31, 0.10);
+  --radius: 10px;
+  --shadow: 0 1px 3px rgba(20, 23, 31, 0.08);
+  --space: 16px;
+}
+/* Theme resolution. Without data-theme the viewer's system preference decides,
+   as it always did. With it, the artifact's own choice wins in BOTH directions:
+   a page that hardcodes one palette must not be handed the opposite set of
+   tokens by the machine it happens to be opened on. The dark values appear
+   twice because a media query cannot be folded into a selector list.
+   The attribute sits inside :where() so these blocks keep the specificity of a
+   bare :root — the page's own <style> is linked after this file and must go on
+   overriding any token it wants, exactly as it could before. */
+@media (prefers-color-scheme: dark) {
+  :root:where(:not([data-theme="light"])) {
+    --accent-text: color-mix(in srgb, var(--accent) 78%, #fff);
+    --bg: #101318;
+    --surface: #181c23;
+    --text: #eef1f6;
+    --text-muted: #9aa4b2;
+    --border: rgba(238, 241, 246, 0.12);
+    --shadow: 0 1px 3px rgba(0, 0, 0, 0.4);
+  }
+}
+:root:where([data-theme="dark"]) {
+  color-scheme: dark;
+  --accent-text: color-mix(in srgb, var(--accent) 78%, #fff);
+  --bg: #101318;
+  --surface: #181c23;
+  --text: #eef1f6;
+  --text-muted: #9aa4b2;
+  --border: rgba(238, 241, 246, 0.12);
+  --shadow: 0 1px 3px rgba(0, 0, 0, 0.4);
+}
+:root:where([data-theme="light"]) { color-scheme: light; }
+* { box-sizing: border-box; }
+html, body { margin: 0; padding: 0; }
+body {
+  background: var(--bg);
+  color: var(--text);
+  font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  line-height: 1.55;
+  -webkit-font-smoothing: antialiased;
+}
+img { max-width: 100%; display: block; }
+
+.shell-container { max-width: 1100px; margin: 0 auto; padding: 0 20px; }
+.shell-section { padding: calc(var(--space) * 2) 0; }
+.shell-grid { display: grid; gap: var(--space); grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); }
+.shell-toolbar { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; margin-bottom: var(--space); }
+.shell-footer { padding: 24px 0 40px; color: var(--text-muted); font-size: 13px; }
+
+.shell-hero { padding: calc(var(--space) * 3) 0 calc(var(--space) * 2); }
+.shell-hero h1 { font-size: clamp(26px, 4vw, 40px); line-height: 1.15; margin: 0 0 10px; text-wrap: balance; }
+.shell-hero p { color: var(--text-muted); max-width: 60ch; margin: 0; }
+
+.panel {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow);
+  padding: var(--space);
+}
+
+.kpi { display: flex; flex-direction: column; gap: 4px; }
+.kpi .kpi-value { font-size: 28px; font-weight: 650; line-height: 1.1; }
+.kpi .kpi-label { font-size: 13px; color: var(--text-muted); }
+.kpi .kpi-delta { font-size: 12.5px; font-weight: 600; }
+.kpi .kpi-delta.up { color: #0a8f3c; }
+.kpi .kpi-delta.down { color: #cf3131; }
+
+table.shell-table { border-collapse: collapse; width: 100%; font-size: 14px; }
+table.shell-table th {
+  text-align: left; font-size: 11.5px; letter-spacing: 0.05em; text-transform: uppercase;
+  color: var(--text-muted); font-weight: 600;
+}
+table.shell-table th, table.shell-table td { padding: 9px 12px 9px 0; border-bottom: 1px solid var(--border); }
+table.shell-table td.num, table.shell-table th.num { text-align: right; font-variant-numeric: tabular-nums; }
+table.shell-table tbody tr:hover { background: color-mix(in srgb, var(--accent) 6%, transparent); }
+
+.chart-box { width: 100%; min-height: 220px; }
+.chart-box svg { width: 100%; height: auto; display: block; }
+
+.muted { color: var(--text-muted); }
+.accent { color: var(--accent-text); }
+.shell-badge {
+  display: inline-flex; align-items: center; gap: 6px;
+  font-size: 12px; font-weight: 600; padding: 3px 10px; border-radius: 999px;
+  background: color-mix(in srgb, var(--accent) 12%, transparent); color: var(--accent-text);
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .shell-fade { animation: shell-fade 400ms ease both; }
+  @keyframes shell-fade { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: none; } }
+}
+
+</style>
+  
+
+  <style>
+    :root {
+      --accent: #D4AF37;
+      --accent-gold: #D4AF37;
+      --accent-deep: #997520;
+      --accent-light: #F4E297;
+      --bg: #0B1524;
+      --bg-surface: #101E33;
+      --bg-surface-elevated: #162844;
+      --border-subtle: rgba(212, 175, 55, 0.22);
+      --border-strong: rgba(212, 175, 55, 0.5);
+      --text: #F1F4F9;
+      --text-muted: #9BAEC8;
+      --font-serif: 'Playfair Display', Georgia, serif;
+      --font-sans: 'Plus Jakarta Sans', system-ui, -apple-system, sans-serif;
+    }
+
+    * {
+      box-sizing: border-box;
+      -webkit-tap-highlight-color: transparent;
+    }
+
+    body {
+      margin: 0;
+      padding: 0;
+      background: radial-gradient(circle at 50% 0%, #162a4a 0%, #0c1728 55%, #070d17 100%);
+      background-attachment: fixed;
+      color: var(--text);
+      font-family: var(--font-sans);
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+      line-height: 1.5;
+    }
+
+    /* Fixed Discreet Badge */
+    .top-pill-badge {
+      position: fixed;
+      top: 12px;
+      right: 14px;
+      z-index: 100;
+      background: rgba(16, 30, 51, 0.85);
+      border: 1px solid rgba(212, 175, 55, 0.28);
+      backdrop-filter: blur(8px);
+      -webkit-backdrop-filter: blur(8px);
+      padding: 4px 10px;
+      border-radius: 999px;
+      font-size: 0.68rem;
+      letter-spacing: 0.04em;
+      color: #C3D0E5;
+      pointer-events: none;
+      display: flex;
+      align-items: center;
+      gap: 5px;
+    }
+    .top-pill-badge::before {
+      content: "";
+      width: 5px;
+      height: 5px;
+      background: var(--accent-gold);
+      border-radius: 50%;
+      box-shadow: 0 0 6px var(--accent-gold);
+      display: inline-block;
+    }
+
+    /* App Wrapper */
+    .app-viewport {
+      width: 100%;
+      max-width: 640px;
+      margin: 0 auto;
+      padding: 16px 16px 40px;
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+    }
+
+    /* Screen Transitions */
+    .screen {
+      display: none;
+      opacity: 0;
+      transform: translateY(6px);
+      transition: opacity 0.24s ease, transform 0.24s ease;
+      width: 100%;
+    }
+    .screen.active {
+      display: flex;
+      flex-direction: column;
+      opacity: 1;
+      transform: translateY(0);
+    }
+
+    /* Typography */
+    .font-serif {
+      font-family: var(--font-serif);
+    }
+    h1, h2, h3 {
+      font-family: var(--font-serif);
+      margin: 0 0 8px;
+      font-weight: 600;
+      letter-spacing: -0.01em;
+      color: #FFF;
+    }
+
+    /* Brand Header */
+    .brand-header {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      text-align: center;
+      padding-top: 18px;
+      margin-bottom: 24px;
+    }
+    .brand-logo-svg {
+      width: 72px;
+      height: 72px;
+      filter: drop-shadow(0 4px 14px rgba(212, 175, 55, 0.35));
+      margin-bottom: 10px;
+    }
+    .brand-name {
+      font-family: var(--font-serif);
+      font-size: 1.15rem;
+      letter-spacing: 0.24em;
+      text-transform: uppercase;
+      background: linear-gradient(135deg, #FFF0B8 0%, #D4AF37 55%, #AA8222 100%);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      color: var(--accent-gold);
+      font-weight: 700;
+      margin: 0;
+    }
+
+    /* Mini Step Box: Permanent Rule #2 */
+    .step-box {
+      background: linear-gradient(90deg, rgba(212, 175, 55, 0.12) 0%, rgba(212, 175, 55, 0.04) 100%);
+      border-left: 3px solid var(--accent-gold);
+      border-top: 1px solid rgba(212, 175, 55, 0.2);
+      border-right: 1px solid rgba(212, 175, 55, 0.15);
+      border-bottom: 1px solid rgba(212, 175, 55, 0.15);
+      border-radius: 6px;
+      padding: 9px 12px;
+      margin-bottom: 16px;
+      backdrop-filter: blur(4px);
+    }
+    .step-box-title {
+      font-size: 0.72rem;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+      color: var(--accent-light);
+      margin-bottom: 2px;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+    .step-box-desc {
+      font-size: 0.82rem;
+      color: #E2EAF4;
+      line-height: 1.35;
+      margin: 0;
+    }
+
+    /* Navigation Bar */
+    .step-nav {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-bottom: 14px;
+      gap: 8px;
+    }
+    .btn-back {
+      background: rgba(255, 255, 255, 0.06);
+      border: 1px solid rgba(212, 175, 55, 0.25);
+      color: #C3D0E5;
+      padding: 6px 12px;
+      border-radius: 6px;
+      font-size: 0.8rem;
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      cursor: pointer;
+      transition: all 0.2s;
+    }
+    .btn-back:hover {
+      background: rgba(212, 175, 55, 0.15);
+      color: #FFF;
+      border-color: var(--accent-gold);
+    }
+    .step-dots {
+      display: flex;
+      gap: 6px;
+    }
+    .step-dot {
+      width: 7px;
+      height: 7px;
+      border-radius: 50%;
+      background: rgba(255, 255, 255, 0.2);
+      transition: background 0.2s, transform 0.2s;
+    }
+    .step-dot.active {
+      background: var(--accent-gold);
+      transform: scale(1.25);
+      box-shadow: 0 0 6px var(--accent-gold);
+    }
+
+    /* Action Cards on Opening */
+    .hero-card {
+      background: linear-gradient(145deg, #13243D 0%, #0E1A2D 100%);
+      border: 1px solid var(--border-subtle);
+      border-radius: 12px;
+      padding: 18px 16px;
+      margin-bottom: 14px;
+      cursor: pointer;
+      transition: transform 0.2s, border-color 0.2s, box-shadow 0.2s;
+      position: relative;
+      overflow: hidden;
+      text-align: left;
+      width: 100%;
+    }
+    .hero-card::after {
+      content: "";
+      position: absolute;
+      top: 0;
+      right: 0;
+      bottom: 0;
+      width: 3px;
+      background: linear-gradient(180deg, var(--accent-light), var(--accent-deep));
+      opacity: 0.6;
+    }
+    .hero-card:hover {
+      transform: translateY(-2px);
+      border-color: var(--border-strong);
+      box-shadow: 0 8px 24px rgba(0, 0, 0, 0.35), 0 0 16px rgba(212, 175, 55, 0.15);
+    }
+    .hero-card-tag {
+      font-size: 0.72rem;
+      text-transform: uppercase;
+      letter-spacing: 0.1em;
+      color: var(--accent-light);
+      margin-bottom: 4px;
+      font-weight: 600;
+    }
+    .hero-card-title {
+      font-size: 1.12rem;
+      font-weight: 700;
+      color: #FFF;
+      margin-bottom: 6px;
+    }
+    .hero-card-desc {
+      font-size: 0.86rem;
+      color: #AEC1DC;
+      margin: 0;
+      line-height: 1.4;
+    }
+
+    /* Chat Components */
+    .chat-container {
+      background: #0D1829;
+      border: 1px solid rgba(212, 175, 55, 0.2);
+      border-radius: 12px;
+      display: flex;
+      flex-direction: column;
+      height: 480px;
+      overflow: hidden;
+    }
+    .chat-header {
+      background: #13233C;
+      padding: 10px 14px;
+      border-bottom: 1px solid rgba(212, 175, 55, 0.18);
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+    .avatar-ia {
+      width: 32px;
+      height: 32px;
+      border-radius: 50%;
+      background: radial-gradient(circle at 30% 30%, #FFE69A, #8D6D24);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 0.85rem;
+      font-weight: bold;
+      color: #0E1A2C;
+      box-shadow: 0 0 10px rgba(212, 175, 55, 0.4);
+    }
+    .chat-messages {
+      flex: 1;
+      padding: 14px;
+      overflow-y: auto;
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+      scroll-behavior: smooth;
+    }
+    .bubble {
+      max-width: 86%;
+      padding: 10px 14px;
+      border-radius: 14px;
+      font-size: 0.88rem;
+      line-height: 1.4;
+      animation: bubblePop 0.22s ease-out;
+    }
+    @keyframes bubblePop {
+      from { opacity: 0; transform: translateY(8px); }
+      to { opacity: 1; transform: translateY(0); }
+    }
+    .bubble-ia {
+      background: #172A45;
+      color: #F1F5FA;
+      border: 1px solid rgba(212, 175, 55, 0.22);
+      border-top-left-radius: 3px;
+      align-self: flex-start;
+    }
+    .bubble-user {
+      background: linear-gradient(135deg, #B8860B 0%, #876214 100%);
+      color: #FFFFFF;
+      font-weight: 500;
+      border-top-right-radius: 3px;
+      align-self: flex-end;
+      box-shadow: 0 2px 8px rgba(0, 0, 0, 0.25);
+    }
+    .typing-indicator {
+      display: inline-flex;
+      align-items: center;
+      gap: 4px;
+      padding: 10px 14px;
+      background: #172A45;
+      border-radius: 14px;
+      border-top-left-radius: 3px;
+      align-self: flex-start;
+      border: 1px solid rgba(212, 175, 55, 0.2);
+    }
+    .typing-indicator span {
+      width: 6px;
+      height: 6px;
+      background: var(--accent-gold);
+      border-radius: 50%;
+      opacity: 0.6;
+      animation: blink 1.2s infinite ease-in-out;
+    }
+    .typing-indicator span:nth-child(2) { animation-delay: 0.2s; }
+    .typing-indicator span:nth-child(3) { animation-delay: 0.4s; }
+    @keyframes blink {
+      0%, 100% { transform: scale(0.8); opacity: 0.4; }
+      50% { transform: scale(1.2); opacity: 1; }
+    }
+
+    .chat-controls {
+      background: #112036;
+      padding: 10px;
+      border-top: 1px solid rgba(212, 175, 55, 0.15);
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+    }
+    .quick-replies {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 6px;
+    }
+    .quick-chip {
+      background: rgba(212, 175, 55, 0.12);
+      border: 1px solid rgba(212, 175, 55, 0.35);
+      color: #F8E7AB;
+      font-size: 0.76rem;
+      font-weight: 500;
+      padding: 6px 10px;
+      border-radius: 16px;
+      cursor: pointer;
+      transition: background 0.15s, transform 0.15s;
+    }
+    .quick-chip:hover {
+      background: rgba(212, 175, 55, 0.25);
+      transform: translateY(-1px);
+    }
+    .input-row {
+      display: flex;
+      gap: 6px;
+    }
+    .input-row input {
+      flex: 1;
+      background: #0B1626;
+      border: 1px solid rgba(212, 175, 55, 0.3);
+      border-radius: 6px;
+      padding: 8px 12px;
+      color: #FFF;
+      font-size: 0.84rem;
+      outline: none;
+    }
+    .input-row input:focus {
+      border-color: var(--accent-gold);
+      box-shadow: 0 0 6px rgba(212, 175, 55, 0.25);
+    }
+    .btn-send {
+      background: linear-gradient(135deg, #D4AF37 0%, #997520 100%);
+      color: #0B1626;
+      border: none;
+      border-radius: 6px;
+      font-weight: 700;
+      padding: 0 14px;
+      cursor: pointer;
+      font-size: 0.85rem;
+    }
+
+    /* Structured Dossier (Passo B) */
+    .dossier-card {
+      background: #112036;
+      border: 1px solid var(--border-subtle);
+      border-radius: 10px;
+      padding: 16px;
+      position: relative;
+    }
+    .dossier-badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 5px;
+      background: rgba(34, 197, 94, 0.12);
+      border: 1px solid rgba(34, 197, 94, 0.4);
+      color: #4ade80;
+      font-size: 0.72rem;
+      padding: 3px 8px;
+      border-radius: 999px;
+      font-weight: 600;
+    }
+    .dossier-grid {
+      display: grid;
+      grid-template-columns: repeat(2, 1fr);
+      gap: 10px 12px;
+      margin-top: 14px;
+    }
+    .dossier-item {
+      background: rgba(255, 255, 255, 0.03);
+      border: 1px solid rgba(255, 255, 255, 0.06);
+      border-radius: 6px;
+      padding: 8px 10px;
+    }
+    .dossier-label {
+      font-size: 0.68rem;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      color: var(--accent-light);
+      margin-bottom: 2px;
+    }
+    .dossier-val {
+      font-size: 0.85rem;
+      font-weight: 600;
+      color: #FFF;
+      word-break: break-word;
+    }
+
+    /* WhatsApp Simulator (Passo C) */
+    .wa-mock {
+      background: #0b141a;
+      border: 1px solid rgba(255, 255, 255, 0.12);
+      border-radius: 12px;
+      overflow: hidden;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+    }
+    .wa-top {
+      background: #202c33;
+      padding: 10px 14px;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      border-bottom: 1px solid #2a3942;
+    }
+    .wa-avatar {
+      width: 34px;
+      height: 34px;
+      border-radius: 50%;
+      background: #00a884;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      color: #FFF;
+      font-weight: 700;
+      font-size: 0.9rem;
+    }
+    .wa-body {
+      background: #0d1921;
+      padding: 14px;
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+      min-height: 280px;
+    }
+    .wa-bubble-system {
+      background: #005c4b;
+      color: #e9edef;
+      border-radius: 8px;
+      border-top-right-radius: 0;
+      padding: 8px 12px;
+      font-size: 0.82rem;
+      align-self: flex-end;
+      max-width: 88%;
+      box-shadow: 0 1px 2px rgba(0,0,0,0.3);
+      line-height: 1.4;
+    }
+    .wa-bubble-client {
+      background: #202c33;
+      color: #e9edef;
+      border-radius: 8px;
+      border-top-left-radius: 0;
+      padding: 8px 12px;
+      font-size: 0.82rem;
+      align-self: flex-start;
+      max-width: 80%;
+      box-shadow: 0 1px 2px rgba(0,0,0,0.3);
+    }
+    .wa-status-check {
+      color: #53bdeb;
+      font-size: 0.7rem;
+      margin-left: 4px;
+    }
+
+    /* Architect Panel (Passo D) */
+    .lead-panel {
+      background: #112037;
+      border: 1px solid rgba(212, 175, 55, 0.35);
+      border-radius: 12px;
+      padding: 16px;
+    }
+    .lead-header-row {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      border-bottom: 1px solid rgba(212, 175, 55, 0.15);
+      padding-bottom: 12px;
+      margin-bottom: 12px;
+    }
+    .status-pill {
+      background: rgba(34, 197, 94, 0.18);
+      border: 1px solid rgba(34, 197, 94, 0.5);
+      color: #86efac;
+      padding: 3px 10px;
+      border-radius: 999px;
+      font-size: 0.72rem;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+    }
+
+    /* Primary CTA Buttons */
+    .btn-gold {
+      background: linear-gradient(135deg, #E6C25B 0%, #D4AF37 50%, #997520 100%);
+      color: #0E1A2D;
+      font-weight: 700;
+      border: 1px solid #FFE69A;
+      border-radius: 8px;
+      padding: 12px 18px;
+      font-size: 0.92rem;
+      cursor: pointer;
+      text-align: center;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 8px;
+      width: 100%;
+      box-shadow: 0 4px 14px rgba(212, 175, 55, 0.28);
+      transition: transform 0.18s, filter 0.18s;
+      text-decoration: none;
+    }
+    .btn-gold:hover {
+      filter: brightness(1.08);
+      transform: translateY(-1px);
+    }
+    .btn-gold:active {
+      transform: translateY(0);
+    }
+    .btn-outline-gold {
+      background: transparent;
+      border: 1px solid var(--accent-gold);
+      color: var(--accent-light);
+      font-weight: 600;
+      border-radius: 8px;
+      padding: 10px 16px;
+      font-size: 0.85rem;
+      cursor: pointer;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      gap: 6px;
+      transition: background 0.18s;
+    }
+    .btn-outline-gold:hover {
+      background: rgba(212, 175, 55, 0.12);
+    }
+
+    /* BEFORE / AFTER SLIDER (Oportunidade 2) */
+    .slider-stage {
+      position: relative;
+      width: 100%;
+      height: 320px;
+      border-radius: 10px;
+      overflow: hidden;
+      border: 1px solid var(--border-strong);
+      user-select: none;
+      -webkit-user-select: none;
+      touch-action: pan-y;
+      box-shadow: 0 10px 28px rgba(0, 0, 0, 0.5);
+      background: #000;
+      cursor: ew-resize;
+    }
+    .slider-layer {
+      position: absolute;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      overflow: hidden;
+    }
+    .slider-layer-before {
+      z-index: 1;
+    }
+    .slider-layer-after {
+      z-index: 2;
+      width: 50%; /* driven by JS slider */
+      border-right: 2px solid var(--accent-gold);
+      box-shadow: 2px 0 12px rgba(212, 175, 55, 0.4);
+    }
+    .slider-layer svg {
+      width: 100%;
+      height: 100%;
+      display: block;
+      pointer-events: none;
+    }
+    .slider-handle {
+      position: absolute;
+      top: 50%;
+      right: -16px;
+      transform: translateY(-50%);
+      width: 32px;
+      height: 32px;
+      border-radius: 50%;
+      background: linear-gradient(135deg, #FFE69A, #AA8222);
+      border: 2px solid #FFF;
+      box-shadow: 0 0 14px rgba(0, 0, 0, 0.6), 0 0 10px var(--accent-gold);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      z-index: 10;
+      cursor: ew-resize;
+    }
+    .slider-handle svg {
+      width: 16px;
+      height: 16px;
+      stroke: #0E1A2C;
+    }
+
+    /* Tags on the slider */
+    .tag-slider {
+      position: absolute;
+      top: 10px;
+      padding: 3px 8px;
+      border-radius: 4px;
+      font-size: 0.68rem;
+      font-weight: 700;
+      letter-spacing: 0.08em;
+      pointer-events: none;
+      z-index: 5;
+    }
+    .tag-antes {
+      right: 10px;
+      background: rgba(0, 0, 0, 0.7);
+      border: 1px solid rgba(255, 255, 255, 0.2);
+      color: #CBD5E1;
+    }
+    .tag-depois {
+      left: 10px;
+      background: rgba(212, 175, 55, 0.85);
+      border: 1px solid #FFE28A;
+      color: #0E1A2D;
+    }
+
+    /* Lightbox button overlay */
+    .zoom-hint {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      background: rgba(16, 30, 51, 0.85);
+      border: 1px solid rgba(212, 175, 55, 0.4);
+      color: var(--accent-light);
+      font-size: 0.78rem;
+      padding: 6px 12px;
+      border-radius: 6px;
+      cursor: pointer;
+      margin-top: 8px;
+      align-self: flex-start;
+      transition: background 0.18s;
+    }
+    .zoom-hint:hover {
+      background: rgba(212, 175, 55, 0.2);
+    }
+
+    /* Token Balance Bar (Passo C) */
+    .token-dashboard {
+      background: #122138;
+      border: 1px solid var(--border-subtle);
+      border-radius: 10px;
+      padding: 14px 16px;
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+      margin-top: 14px;
+    }
+    .token-counter-row {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+    }
+    .token-amount {
+      font-size: 1.5rem;
+      font-weight: 700;
+      color: var(--accent-light);
+      font-family: var(--font-serif);
+      display: flex;
+      align-items: baseline;
+      gap: 6px;
+      transition: transform 0.2s;
+    }
+    .token-amount.deduct {
+      animation: popDeduct 0.35s ease;
+      color: #F87171;
+    }
+    @keyframes popDeduct {
+      0% { transform: scale(1); }
+      50% { transform: scale(1.3); }
+      100% { transform: scale(1); }
+    }
+    .token-label {
+      font-size: 0.78rem;
+      color: var(--text-muted);
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+    }
+
+    /* LIGHTBOX MODAL */
+    .lightbox-modal {
+      display: none;
+      position: fixed;
+      inset: 0;
+      background: rgba(4, 8, 14, 0.94);
+      backdrop-filter: blur(10px);
+      -webkit-backdrop-filter: blur(10px);
+      z-index: 200;
+      align-items: center;
+      justify-content: center;
+      padding: 18px;
+      animation: fadeIn 0.2s ease;
+    }
+    .lightbox-modal.active {
+      display: flex;
+    }
+    @keyframes fadeIn {
+      from { opacity: 0; }
+      to { opacity: 1; }
+    }
+    .lightbox-content {
+      position: relative;
+      max-width: 580px;
+      width: 100%;
+      border-radius: 12px;
+      overflow: hidden;
+      border: 1px solid rgba(212, 175, 55, 0.35);
+      background: #0B1524;
+      box-shadow: 0 16px 40px rgba(0, 0, 0, 0.8);
+    }
+    .lightbox-close {
+      position: absolute;
+      top: 10px;
+      right: 10px;
+      z-index: 30;
+      background: rgba(0, 0, 0, 0.65);
+      border: 1px solid rgba(255, 255, 255, 0.3);
+      color: #FFF;
+      width: 32px;
+      height: 32px;
+      border-radius: 50%;
+      font-size: 1.1rem;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+    .watermark-overlay {
+      position: absolute;
+      inset: 0;
+      pointer-events: none;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      overflow: hidden;
+      z-index: 15;
+    }
+    .watermark-text {
+      transform: rotate(-28deg);
+      font-family: var(--font-serif);
+      font-size: 2.2rem;
+      font-weight: 700;
+      letter-spacing: 0.22em;
+      text-transform: uppercase;
+      color: rgba(212, 175, 55, 0.34);
+      white-space: nowrap;
+      text-shadow: 0 0 10px rgba(0, 0, 0, 0.5);
+      user-select: none;
+    }
+
+    /* Generic Modal Dialog */
+    .simple-modal {
+      display: none;
+      position: fixed;
+      inset: 0;
+      background: rgba(0, 0, 0, 0.78);
+      z-index: 210;
+      align-items: center;
+      justify-content: center;
+      padding: 20px;
+    }
+    .simple-modal.active {
+      display: flex;
+    }
+    .simple-modal-box {
+      background: #112036;
+      border: 1px solid var(--accent-gold);
+      border-radius: 10px;
+      padding: 20px;
+      max-width: 400px;
+      width: 100%;
+      text-align: center;
+      box-shadow: 0 12px 30px rgba(0, 0, 0, 0.7);
+    }
+
+    /* Closing screen layout */
+    .closing-grid {
+      display: flex;
+      flex-direction: column;
+      gap: 14px;
+      margin: 18px 0 24px;
+    }
+    @media (min-width: 600px) {
+      .closing-grid {
+        flex-direction: row;
+      }
+      .closing-grid > div {
+        flex: 1;
+      }
+    }
+    .closing-card {
+      background: #112036;
+      border: 1px solid var(--border-subtle);
+      border-radius: 10px;
+      padding: 16px;
+      display: flex;
+      flex-direction: column;
+      justify-content: space-between;
+      gap: 12px;
+    }
+  </style>
+</head>
+<body>
+
+  <!-- REGRA 1: SELO DISCRETO FIXO -->
+  <aside class="top-pill-badge" aria-label="Aviso de protótipo">
+    Protótipo demonstrativo · IA simulada
+  </aside>
+
+  <div class="app-viewport">
+
+    <!-- ========================================== -->
+    <!-- TELA DE ABERTURA -->
+    <!-- ========================================== -->
+    <section id="screen-home" class="screen active">
+      <!-- Marca: Pena de caligrafia geométrica + Mira/Retícula Art Déco -->
+      <header class="brand-header">
+        <svg class="brand-logo-svg" viewBox="0 0 100 100" fill="none" xmlns="http://www.w3.org/2000/svg" aria-label="Símbolo Prumo Estratégico">
+          <defs>
+            <linearGradient id="goldGrad" x1="0" y1="0" x2="100" y2="100" gradientUnits="userSpaceOnUse">
+              <stop offset="0%" stop-color="#FFEBB0"/>
+              <stop offset="45%" stop-color="#D4AF37"/>
+              <stop offset="100%" stop-color="#876214"/>
+            </linearGradient>
+            <linearGradient id="goldFacet1" x1="40" y1="20" x2="60" y2="80" gradientUnits="userSpaceOnUse">
+              <stop offset="0%" stop-color="#FFF2CE"/>
+              <stop offset="100%" stop-color="#C59B27"/>
+            </linearGradient>
+            <linearGradient id="goldFacet2" x1="50" y1="20" x2="70" y2="80" gradientUnits="userSpaceOnUse">
+              <stop offset="0%" stop-color="#B3871B"/>
+              <stop offset="100%" stop-color="#674705"/>
+            </linearGradient>
+          </defs>
+          <!-- Linhas horizontais que extrapolam o círculo -->
+          <line x1="2" y1="50" x2="26" y2="50" stroke="url(#goldGrad)" stroke-width="1.8" stroke-linecap="round"/>
+          <line x1="74" y1="50" x2="98" y2="50" stroke="url(#goldGrad)" stroke-width="1.8" stroke-linecap="round"/>
+          <line x1="50" y1="4" x2="50" y2="22" stroke="url(#goldGrad)" stroke-width="1.8" stroke-linecap="round"/>
+          <line x1="50" y1="78" x2="50" y2="96" stroke="url(#goldGrad)" stroke-width="1.8" stroke-linecap="round"/>
+          
+          <!-- Círculo / Retícula externa e interna -->
+          <circle cx="50" cy="50" r="32" stroke="url(#goldGrad)" stroke-width="1.5" stroke-dasharray="2 3"/>
+          <circle cx="50" cy="50" r="28" stroke="url(#goldGrad)" stroke-width="1.2"/>
+          <circle cx="50" cy="50" r="38" stroke="url(#goldGrad)" stroke-width="0.8" opacity="0.4"/>
+
+          <!-- Pena de caligrafia com facetas geométricas -->
+          <g transform="translate(0, -2)">
+            <!-- Faceta esquerda iluminada -->
+            <path d="M50 22 L40 46 L46 64 L50 78 L50 22Z" fill="url(#goldFacet1)"/>
+            <!-- Faceta direita sombreada -->
+            <path d="M50 22 L60 46 L54 64 L50 78 L50 22Z" fill="url(#goldFacet2)"/>
+            <!-- Fenda central da pena -->
+            <line x1="50" y1="36" x2="50" y2="70" stroke="#0E1B2E" stroke-width="1.6" stroke-linecap="round"/>
+            <circle cx="50" cy="44" r="2" fill="#0E1B2E"/>
+            <!-- Corte de bico em faceta geométrica -->
+            <polygon points="50,78 48,82 52,82" fill="#FFE59A"/>
+          </g>
+        </svg>
+
+        <h2 class="brand-name">PRUMO ESTRATÉGICO</h2>
+      </header>
+
+      <div style="text-align: center; margin-bottom: 22px;">
+        <h1 style="font-size: 1.45rem; line-height: 1.25;">Veja sua IA trabalhando agora.</h1>
+        <p style="font-size: 0.88rem; color: var(--text-muted); margin: 4px 0 0;">
+          Tecnologia aplicada ao fluxo de escritórios de arquitetura de alto padrão.
+        </p>
+      </div>
+
+      <!-- Dois Cards Grandes Clicáveis -->
+      <button class="hero-card" onclick="goToScreen('op1-chat')" type="button">
+        <div class="hero-card-tag">Demonstração Interativa 01</div>
+        <div class="hero-card-title">1. Pré-atendimento inteligente</div>
+        <p class="hero-card-desc">Cliente responde no chat, você recebe o lead pronto.</p>
+      </button>
+
+      <button class="hero-card" onclick="goToScreen('op2-chat')" type="button">
+        <div class="hero-card-tag">Demonstração Interativa 02</div>
+        <div class="hero-card-title">2. IA com imagens por tokens</div>
+        <p class="hero-card-desc">A IA conversa e mostra o ambiente antes da obra.</p>
+      </button>
+
+      <div style="text-align: center; margin-top: 14px;">
+        <span style="font-size: 0.78rem; color: #8CA0BD; letter-spacing: 0.04em;">
+          Toque em uma opção e teste agora.
+        </span>
+      </div>
+    </section>
+
+
+    <!-- ========================================== -->
+    <!-- OPORTUNIDADE 1: FLUXO DE PRÉ-ATENDIMENTO -->
+    <!-- ========================================== -->
+
+    <!-- OP 1: PASSO A (Chat Simulado Interativo) -->
+    <section id="screen-op1-chat" class="screen">
+      <nav class="step-nav">
+        <button class="btn-back" onclick="goToScreen('home')">← Início</button>
+        <div class="step-dots">
+          <span class="step-dot active"></span>
+          <span class="step-dot"></span>
+          <span class="step-dot"></span>
+          <span class="step-dot"></span>
+        </div>
+      </nav>
+
+      <!-- REGRA 2: CAIXINHA DE ETAPA -->
+      <div class="step-box">
+        <div class="step-box-title">O que você está vendo</div>
+        <p class="step-box-desc">Cliente respondendo: as respostas viram um dossiê organizado.</p>
+      </div>
+
+      <div class="chat-container">
+        <div class="chat-header">
+          <div class="avatar-ia">P</div>
+          <div>
+            <div style="font-size: 0.85rem; font-weight: 600; color: #FFF;">Assistente Prumo IA</div>
+            <div style="font-size: 0.7rem; color: #4ade80;">● Online · Simulando interação com o cliente</div>
+          </div>
+        </div>
+
+        <div id="op1-chat-messages" class="chat-messages">
+          <!-- Inserido dinamicamente via JS -->
+        </div>
+
+        <div class="chat-controls">
+          <div id="op1-quick-chips" class="quick-replies"></div>
+          <form class="input-row" onsubmit="handleOp1InputSubmit(event)">
+            <input id="op1-user-input" type="text" placeholder="Digite uma resposta ou clique acima..." autocomplete="off">
+            <button class="btn-send" type="submit">Enviar</button>
+          </form>
+        </div>
+      </div>
+    </section>
+
+    <!-- OP 1: PASSO B (Ficha Estruturada) -->
+    <section id="screen-op1-dossier" class="screen">
+      <nav class="step-nav">
+        <button class="btn-back" onclick="goToScreen('op1-chat')">← Voltar ao chat</button>
+        <div class="step-dots">
+          <span class="step-dot"></span>
+          <span class="step-dot active"></span>
+          <span class="step-dot"></span>
+          <span class="step-dot"></span>
+        </div>
+      </nav>
+
+      <div class="step-box">
+        <div class="step-box-title">O que você está vendo</div>
+        <p class="step-box-desc">Você recebe o projeto do cliente pronto, sem informação perdida.</p>
+      </div>
+
+      <div class="dossier-card">
+        <div style="display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 8px;">
+          <div>
+            <span id="dossier-badge-status" class="dossier-badge" style="background: rgba(148, 163, 184, 0.12); border-color: rgba(148, 163, 184, 0.3); color: #94A3B8;">○ Aguardando respostas</span>
+            <h3 style="font-size: 1.15rem; margin-top: 6px; margin-bottom: 2px;">Dossiê de Qualificação</h3>
+            <span id="op1-protocol-tag" style="font-size: 0.75rem; color: var(--text-muted);">Protocolo: Não gerado</span>
+          </div>
+          <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="#D4AF37" stroke-width="1.8" stroke-linecap="round">
+            <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path>
+            <polyline points="14 2 14 8 20 8"></polyline>
+            <line x1="16" y1="13" x2="8" y2="13"></line>
+            <line x1="16" y1="17" x2="8" y2="17"></line>
+            <polyline points="10 9 9 9 8 9"></polyline>
+          </svg>
+        </div>
+
+        <div class="dossier-grid">
+          <div class="dossier-item">
+            <div class="dossier-label">Tipo de Projeto</div>
+            <div id="dos-tipo" class="dossier-val" style="color: var(--text-muted); font-weight: 400;">—</div>
+          </div>
+          <div class="dossier-item">
+            <div class="dossier-label">Ambientes</div>
+            <div id="dos-ambientes" class="dossier-val" style="color: var(--text-muted); font-weight: 400;">—</div>
+          </div>
+          <div class="dossier-item">
+            <div class="dossier-label">Estilo Referência</div>
+            <div id="dos-estilo" class="dossier-val" style="color: var(--text-muted); font-weight: 400;">—</div>
+          </div>
+          <div class="dossier-item">
+            <div class="dossier-label">Metragem</div>
+            <div id="dos-metragem" class="dossier-val" style="color: var(--text-muted); font-weight: 400;">—</div>
+          </div>
+          <div class="dossier-item">
+            <div class="dossier-label">Região / Bairro</div>
+            <div id="dos-regiao" class="dossier-val" style="color: var(--text-muted); font-weight: 400;">—</div>
+          </div>
+          <div class="dossier-item">
+            <div class="dossier-label">Investimento Previsto</div>
+            <div id="dos-investimento" class="dossier-val" style="color: var(--text-muted); font-weight: 400;">—</div>
+          </div>
+          <div class="dossier-item">
+            <div class="dossier-label">Prazo Desejado</div>
+            <div id="dos-prazo" class="dossier-val" style="color: var(--text-muted); font-weight: 400;">—</div>
+          </div>
+          <div class="dossier-item">
+            <div class="dossier-label">Desejos Especiais</div>
+            <div id="dos-desejos" class="dossier-val" style="color: var(--text-muted); font-weight: 400;">—</div>
+          </div>
+        </div>
+      </div>
+
+      <div style="margin-top: 18px;">
+        <button class="btn-gold" onclick="goToScreen('op1-whatsapp')">
+          Avançar: Ver validação no WhatsApp →
+        </button>
+      </div>
+    </section>
+
+    <!-- OP 1: PASSO C (WhatsApp Mock) -->
+    <section id="screen-op1-whatsapp" class="screen">
+      <nav class="step-nav">
+        <button class="btn-back" onclick="goToScreen('op1-dossier')">← Voltar à ficha</button>
+        <div class="step-dots">
+          <span class="step-dot"></span>
+          <span class="step-dot"></span>
+          <span class="step-dot active"></span>
+          <span class="step-dot"></span>
+        </div>
+      </nav>
+
+      <div class="step-box">
+        <div class="step-box-title">O que você está vendo</div>
+        <p class="step-box-desc">Confirmação automática pelo WhatsApp: informação validada antes de chegar a você.</p>
+      </div>
+
+      <div class="wa-mock">
+        <div class="wa-top">
+          <div class="wa-avatar">PE</div>
+          <div>
+            <div style="font-size: 0.88rem; font-weight: 600; color: #FFF;">Atendimento Arquiteto</div>
+            <div style="font-size: 0.7rem; color: #8696a0;">Conta comercial verificada</div>
+          </div>
+        </div>
+
+        <div id="wa-body" class="wa-body">
+          <!-- Inicia vazio por padrão em todas as visitas -->
+          <div id="wa-empty-hint" style="text-align: center; margin: auto; color: #8696a0; font-size: 0.82rem; padding: 24px 14px; line-height: 1.4;">
+            Nenhuma mensagem registrada.<br>
+            Conclua as perguntas no chat para gerar a validação automática pelo WhatsApp.
+          </div>
+        </div>
+      </div>
+
+      <div style="margin-top: 18px;">
+        <button class="btn-gold" onclick="goToScreen('op1-panel')">
+          Avançar: Ver no painel do Arquiteto →
+        </button>
+      </div>
+    </section>
+
+    <!-- OP 1: PASSO D (Painel do Arquiteto) -->
+    <section id="screen-op1-panel" class="screen">
+      <nav class="step-nav">
+        <button class="btn-back" onclick="goToScreen('op1-whatsapp')">← Voltar ao WhatsApp</button>
+        <div class="step-dots">
+          <span class="step-dot"></span>
+          <span class="step-dot"></span>
+          <span class="step-dot"></span>
+          <span class="step-dot active"></span>
+        </div>
+      </nav>
+
+      <div class="step-box">
+        <div class="step-box-title">O que você está vendo</div>
+        <p class="step-box-desc">Lead qualificado com um clique para contato.</p>
+      </div>
+
+      <div class="lead-panel">
+        <div class="lead-header-row">
+          <div>
+            <div id="lead-stage-label" style="font-size: 0.76rem; color: var(--text-muted); text-transform: uppercase;">Aguardando Lead</div>
+            <h3 id="lead-client-name" style="font-size: 1.18rem; margin: 2px 0 0;">—</h3>
+            <span id="lead-client-source" style="font-size: 0.78rem; color: var(--text-muted);">Origem: IA Instagram / Site</span>
+          </div>
+          <span id="lead-status-pill" class="status-pill" style="background: rgba(148, 163, 184, 0.15); border-color: rgba(148, 163, 184, 0.3); color: #94A3B8;">Pendente</span>
+        </div>
+
+        <div style="font-size: 0.85rem; line-height: 1.5; color: #CBD5E1; margin-bottom: 14px;">
+          <p style="margin: 0 0 6px;" id="lead-summary-scope">
+            <strong style="color: #FFF;">Escopo Validado:</strong> Formulário ainda não preenchido.
+          </p>
+          <p style="margin: 0;" id="lead-summary-status">
+            <strong style="color: #FFF;">Status de Validação:</strong> Aguardando conclusão do pré-atendimento.
+          </p>
+        </div>
+
+        <div style="display: flex; gap: 8px;">
+          <button id="btn-lead-contact" class="btn-gold" onclick="showLeadSuccess()" style="flex: 2;">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72 12.84 12.84 0 0 0 .7 2.81 2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45 12.84 12.84 0 0 0 2.81.7A2 2 0 0 1 22 16.92z"></path></svg>
+            Entrar em Contato com Cliente
+          </button>
+        </div>
+      </div>
+
+      <div style="margin-top: 20px; display: flex; flex-direction: column; gap: 10px;">
+        <button class="btn-outline-gold" onclick="goToScreen('op2-chat')">
+          Testar agora a Opção 2: IA com Imagens →
+        </button>
+        <button class="btn-back" onclick="goToScreen('closing')" style="text-align: center; justify-content: center;">
+          Finalizar Demonstração
+        </button>
+      </div>
+    </section>
+
+
+    <!-- ========================================== -->
+    <!-- OPORTUNIDADE 2: IA COM IMAGENS & TOKENS -->
+    <!-- ========================================== -->
+
+    <!-- OP 2: PASSO A (Chat Curto de Geração) -->
+    <section id="screen-op2-chat" class="screen">
+      <nav class="step-nav">
+        <button class="btn-back" onclick="goToScreen('home')">← Início</button>
+        <div class="step-dots">
+          <span class="step-dot active"></span>
+          <span class="step-dot"></span>
+          <span class="step-dot"></span>
+          <span class="step-dot"></span>
+        </div>
+      </nav>
+
+      <div class="step-box">
+        <div class="step-box-title">O que você está vendo</div>
+        <p class="step-box-desc">A IA entende o projeto e gera a imagem do conceito.</p>
+      </div>
+
+      <div class="chat-container" style="height: 380px;">
+        <div class="chat-header">
+          <div class="avatar-ia">P</div>
+          <div>
+            <div style="font-size: 0.85rem; font-weight: 600; color: #FFF;">Gerador Conceitual Prumo</div>
+            <div style="font-size: 0.7rem; color: #4ade80;">● Módulo de Visualização Espacial</div>
+          </div>
+        </div>
+
+        <div id="op2-chat-messages" class="chat-messages">
+          <!-- Conversa dinâmica -->
+        </div>
+
+        <div class="chat-controls">
+          <button id="op2-btn-generate" class="btn-gold" onclick="goToScreen('op2-slider')">
+            Ver Renderização Antes / Depois →
+          </button>
+        </div>
+      </div>
+    </section>
+
+    <!-- OP 2: PASSO B (Slider Antes / Depois Interativo) -->
+    <section id="screen-op2-slider" class="screen">
+      <nav class="step-nav">
+        <button class="btn-back" onclick="goToScreen('op2-chat')">← Voltar ao chat</button>
+        <div class="step-dots">
+          <span class="step-dot"></span>
+          <span class="step-dot active"></span>
+          <span class="step-dot"></span>
+          <span class="step-dot"></span>
+        </div>
+      </nav>
+
+      <div class="step-box">
+        <div class="step-box-title">O que você está vendo</div>
+        <p class="step-box-desc">Arraste a divisória central para ver a transformação imediata do ambiente.</p>
+      </div>
+
+      <!-- STAGE DO SLIDER INTERATIVO COM POINTER DRAG -->
+      <div id="compare-slider" class="slider-stage" aria-label="Comparação antes e depois">
+        <!-- Tag Antes -->
+        <span class="tag-slider tag-antes">ANTES: EM OBRA</span>
+
+        <!-- Lado Antes (Fundo Total) -->
+        <div class="slider-layer slider-layer-before">
+          <!-- Render SVG ANTES (Obra crua, piso cinza cimento, fiação exposta, tijolo/massa) -->
+          <svg viewBox="0 0 600 380" preserveAspectRatio="none" xmlns="http://www.w3.org/2000/svg">
+            <defs>
+              <linearGradient id="wallRaw" x1="0" y1="0" x2="0" y2="1">
+                <stop offset="0%" stop-color="#3d444e"/>
+                <stop offset="100%" stop-color="#2a3038"/>
+              </linearGradient>
+              <linearGradient id="floorConcrete" x1="0" y1="0" x2="0" y2="1">
+                <stop offset="0%" stop-color="#22272e"/>
+                <stop offset="100%" stop-color="#14171c"/>
+              </linearGradient>
+            </defs>
+            <!-- Teto escuro inacabado -->
+            <polygon points="0,0 600,0 480,90 120,90" fill="#20252b"/>
+            <!-- Parede do fundo (crua com manchas) -->
+            <rect x="120" y="90" width="360" height="170" fill="url(#wallRaw)"/>
+            <!-- Texturas de tijolo aparente / emboço -->
+            <line x1="140" y1="130" x2="260" y2="130" stroke="#4f5863" stroke-width="1.5" stroke-dasharray="8 4"/>
+            <line x1="140" y1="150" x2="250" y2="150" stroke="#4f5863" stroke-width="1.5" stroke-dasharray="12 5"/>
+            <line x1="140" y1="170" x2="270" y2="170" stroke="#4f5863" stroke-width="1.5" stroke-dasharray="10 3"/>
+            <!-- Parede esquerda -->
+            <polygon points="0,0 120,90 120,260 0,380" fill="#2d333b"/>
+            <!-- Parede direita com vão de janela fria -->
+            <polygon points="600,0 480,90 480,260 600,380" fill="#272c33"/>
+            <polygon points="560,70 500,115 500,240 560,300" fill="#384556" opacity="0.45"/>
+            <!-- Piso de concreto cru -->
+            <polygon points="0,380 120,260 480,260 600,380" fill="url(#floorConcrete)"/>
+            <!-- Manchas no piso -->
+            <ellipse cx="280" cy="310" rx="60" ry="14" fill="#1b1f24" opacity="0.6"/>
+            <!-- Fio exposto com lâmpada nua pendurada -->
+            <path d="M300 0 Q 302 45, 300 80" stroke="#111" stroke-width="2.5" fill="none"/>
+            <rect x="296" y="80" width="8" height="8" fill="#555"/>
+            <circle cx="300" cy="94" r="7" fill="#e2e8f0" opacity="0.85"/>
+            <circle cx="300" cy="94" r="16" fill="#e2e8f0" opacity="0.12"/>
+            <!-- Conduíte aparente na parede esquerda -->
+            <path d="M40 70 L120 130 L120 220" stroke="#1f2329" stroke-width="4" fill="none"/>
+          </svg>
+        </div>
+
+        <!-- Lado Depois (Sobreposição redimensionável) -->
+        <div id="slider-after-layer" class="slider-layer slider-layer-after">
+          <span class="tag-slider tag-depois">DEPOIS: CONCEITO IA</span>
+          <!-- Render SVG DEPOIS (Living sofisticado, piso de madeira em espinha de peixe, painel ripado, sofá elegante, luz quente, toque dourado) -->
+          <svg id="svg-after-scene" viewBox="0 0 600 380" preserveAspectRatio="none" xmlns="http://www.w3.org/2000/svg">
+            <defs>
+              <linearGradient id="warmCeiling" x1="0" y1="0" x2="0" y2="1">
+                <stop offset="0%" stop-color="#182333"/>
+                <stop offset="100%" stop-color="#1e2c40"/>
+              </linearGradient>
+              <linearGradient id="warmWallBack" x1="0" y1="0" x2="1" y2="0">
+                <stop offset="0%" stop-color="#22334d"/>
+                <stop offset="50%" stop-color="#2a3f5f"/>
+                <stop offset="100%" stop-color="#1f2e46"/>
+              </linearGradient>
+              <linearGradient id="woodFloor" x1="0" y1="0" x2="0" y2="1">
+                <stop offset="0%" stop-color="#4a3520"/>
+                <stop offset="50%" stop-color="#3d2a17"/>
+                <stop offset="100%" stop-color="#2a1c0d"/>
+              </linearGradient>
+              <linearGradient id="sofaGrad" x1="0" y1="0" x2="0" y2="1">
+                <stop offset="0%" stop-color="#E5DDD0"/>
+                <stop offset="100%" stop-color="#C2B7A3"/>
+              </linearGradient>
+              <radialGradient id="lampGlow" cx="50%" cy="50%" r="50%">
+                <stop offset="0%" stop-color="#FFEBB0" stop-opacity="0.9"/>
+                <stop offset="50%" stop-color="#D4AF37" stop-opacity="0.25"/>
+                <stop offset="100%" stop-color="#D4AF37" stop-opacity="0"/>
+              </radialGradient>
+            </defs>
+
+            <!-- Teto com sancas de LED indireto -->
+            <polygon points="0,0 600,0 480,90 120,90" fill="url(#warmCeiling)"/>
+            <line x1="120" y1="90" x2="480" y2="90" stroke="#FFE7A3" stroke-width="2" opacity="0.75"/>
+
+            <!-- Parede do Fundo Decorada (Painel e Arte) -->
+            <rect x="120" y="90" width="360" height="170" fill="url(#warmWallBack)"/>
+
+            <!-- Painel ripado sofisticado na direita da parede de fundo -->
+            <g opacity="0.6">
+              <line x1="380" y1="90" x2="380" y2="260" stroke="#5c4228" stroke-width="3"/>
+              <line x1="390" y1="90" x2="390" y2="260" stroke="#5c4228" stroke-width="3"/>
+              <line x1="400" y1="90" x2="400" y2="260" stroke="#5c4228" stroke-width="3"/>
+              <line x1="410" y1="90" x2="410" y2="260" stroke="#5c4228" stroke-width="3"/>
+              <line x1="420" y1="90" x2="420" y2="260" stroke="#5c4228" stroke-width="3"/>
+              <line x1="430" y1="90" x2="430" y2="260" stroke="#5c4228" stroke-width="3"/>
+              <line x1="440" y1="90" x2="440" y2="260" stroke="#5c4228" stroke-width="3"/>
+              <line x1="450" y1="90" x2="450" y2="260" stroke="#5c4228" stroke-width="3"/>
+              <line x1="460" y1="90" x2="460" y2="260" stroke="#5c4228" stroke-width="3"/>
+              <line x1="470" y1="90" x2="470" y2="260" stroke="#5c4228" stroke-width="3"/>
+            </g>
+
+            <!-- Quadro contemporâneo com moldura dourada -->
+            <rect x="180" y="115" width="130" height="75" fill="#182333" stroke="#D4AF37" stroke-width="2.5"/>
+            <!-- Pintura abstrata no quadro -->
+            <path d="M190 160 Q 230 125, 270 155 T 300 135" stroke="#FFE59A" stroke-width="3" fill="none" opacity="0.8"/>
+            <circle cx="270" cy="140" r="14" fill="#B8860B" opacity="0.5"/>
+
+            <!-- Parede Esquerda Elegante com iluminação de arandela -->
+            <polygon points="0,0 120,90 120,260 0,380" fill="#1b2a3f"/>
+            <!-- Arandela dourada vertical -->
+            <rect x="50" y="140" width="4" height="42" fill="#D4AF37"/>
+            <circle cx="52" cy="161" r="28" fill="url(#lampGlow)" opacity="0.6"/>
+
+            <!-- Parede Direita com Janela Panorâmica e Cortinas de Linho -->
+            <polygon points="600,0 480,90 480,260 600,380" fill="#203046"/>
+            <!-- Janela com vista de jardim noturno / iluminação aconchegante -->
+            <polygon points="580,50 495,100 495,250 580,310" fill="#121e2d"/>
+            <polygon points="575,60 500,105 500,245 575,300" fill="#1f364f" opacity="0.5"/>
+            <!-- Cortina de linho fluida -->
+            <polygon points="485,92 505,102 505,258 485,260" fill="#DDD4C5" opacity="0.75"/>
+
+            <!-- Piso de Madeira Nobre com reflexos -->
+            <polygon points="0,380 120,260 480,260 600,380" fill="url(#woodFloor)"/>
+
+            <!-- Tapete de Alta Gramatura em tom marfim -->
+            <polygon points="120,365 190,275 420,275 490,365" fill="#E8E2D6" opacity="0.9"/>
+            <polygon points="125,360 193,278 417,278 485,360" fill="#DED6C5" opacity="0.7"/>
+
+            <!-- Sofá Modular Contemporâneo em L / Estofado Nobre -->
+            <g transform="translate(160, 240)">
+              <!-- Base e encosto do sofá -->
+              <rect x="0" y="20" width="230" height="40" rx="8" fill="url(#sofaGrad)" stroke="#AFA38E" stroke-width="1"/>
+              <rect x="15" y="0" width="200" height="28" rx="6" fill="#D5CBBA"/>
+              <!-- Assentos divididos -->
+              <rect x="18" y="22" width="62" height="34" rx="4" fill="#DDD4C5"/>
+              <rect x="84" y="22" width="62" height="34" rx="4" fill="#DDD4C5"/>
+              <rect x="150" y="22" width="62" height="34" rx="4" fill="#DDD4C5"/>
+              <!-- Almofadas de veludo com acento dourado / ocre -->
+              <rect x="25" y="8" width="30" height="24" rx="3" fill="#997520"/>
+              <rect x="165" y="8" width="28" height="22" rx="3" fill="#D4AF37" opacity="0.85"/>
+            </g>
+
+            <!-- Mesa de Centro Orgânica em Mármore & Latão -->
+            <ellipse cx="280" cy="326" rx="55" ry="16" fill="#F4EFE6" stroke="#D4AF37" stroke-width="1.5"/>
+            <ellipse cx="280" cy="327" rx="52" ry="14" fill="#ECE5D8"/>
+            <!-- Livro de arte e vela na mesa -->
+            <rect x="255" y="320" width="20" height="8" rx="1" fill="#1b2a3f"/>
+            <circle cx="295" cy="323" r="4" fill="#FFEBB0"/>
+
+            <!-- Luminária de Piso em Arco Dourado (Prumo Style) -->
+            <path d="M430 330 Q 450 170, 360 160" stroke="#D4AF37" stroke-width="2.8" fill="none"/>
+            <ellipse cx="430" cy="330" rx="16" ry="5" fill="#B8860B"/>
+            <circle cx="360" cy="165" r="12" fill="#D4AF37"/>
+            <circle cx="360" cy="170" r="38" fill="url(#lampGlow)" opacity="0.8"/>
+
+            <!-- Vaso com Ficus Lyrata / Planta Escultural -->
+            <path d="M125 285 L135 245 L155 245 L165 285 Z" fill="#DED6C5" stroke="#B8860B" stroke-width="1"/>
+            <circle cx="145" cy="225" r="16" fill="#2D4A30"/>
+            <circle cx="132" cy="235" r="13" fill="#233B26"/>
+            <circle cx="158" cy="230" r="14" fill="#355639"/>
+          </svg>
+
+          <!-- Manípulo central para arrastar -->
+          <div class="slider-handle">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+              <polyline points="15 18 9 12 15 6"></polyline>
+            </svg>
+          </div>
+        </div>
+      </div>
+
+      <!-- Indicador clicável para Lightbox -->
+      <button class="zoom-hint" onclick="openLightbox(true)">
+        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2">
+          <circle cx="11" cy="11" r="8"></circle>
+          <line x1="21" y1="21" x2="16.65" y2="16.65"></line>
+          <line x1="11" y1="8" x2="11" y2="14"></line>
+          <line x1="8" y1="11" x2="14" y2="11"></line>
+        </svg>
+        Toque para ampliar em tela cheia (com marca d'água de proteção)
+      </button>
+
+      <div style="margin-top: 18px;">
+        <button class="btn-gold" onclick="goToScreen('op2-tokens')">
+          Avançar: Ver consumo por tokens →
+        </button>
+      </div>
+    </section>
+
+    <!-- OP 2: PASSO C (Sistema de Tokens) -->
+    <section id="screen-op2-tokens" class="screen">
+      <nav class="step-nav">
+        <button class="btn-back" onclick="goToScreen('op2-slider')">← Voltar ao slider</button>
+        <div class="step-dots">
+          <span class="step-dot"></span>
+          <span class="step-dot"></span>
+          <span class="step-dot active"></span>
+          <span class="step-dot"></span>
+        </div>
+      </nav>
+
+      <div class="step-box">
+        <div class="step-box-title">O que você está vendo</div>
+        <p class="step-box-desc">Você controla o custo: cada imagem gasta tokens do seu saldo.</p>
+      </div>
+
+      <!-- Painel de Saldo de Tokens -->
+      <div class="token-dashboard">
+        <div class="token-counter-row">
+          <div>
+            <div class="token-label">Seu Saldo Disponível</div>
+            <div class="token-amount" id="token-val">
+              <span id="token-num">10</span>
+              <span style="font-size: 0.85rem; color: var(--accent-gold); font-family: var(--font-sans);">tokens</span>
+            </div>
+          </div>
+          <button class="btn-outline-gold" style="padding: 6px 12px; font-size: 0.78rem;" onclick="openRechargeModal()">
+            + Recarregar tokens
+          </button>
+        </div>
+
+        <div id="token-low-warning" style="display:none; font-size: 0.76rem; color: #FCA5A5; background: rgba(239, 68, 68, 0.12); padding: 6px 10px; border-radius: 6px; border: 1px solid rgba(239, 68, 68, 0.3);">
+          Atenção: restam poucos tokens em sua franquia.
+        </div>
+
+        <div style="font-size: 0.8rem; color: #A4B8D3;">
+          Estilo ativo: <strong id="style-name-badge" style="color: #FFF;">Nenhuma variação gerada</strong> (2 tokens/geração)
+        </div>
+
+        <button id="btn-generate-variation" class="btn-gold" onclick="generateVariation()">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M21.5 2v6h-6M21.34 15.57a10 10 0 1 1-.57-8.38l5.67-5.67"/></svg>
+          Gerar variação de ambiente (-2 tokens)
+        </button>
+      </div>
+
+      <!-- Mini Preview da Variação com Slider Ativo -->
+      <div style="margin-top: 14px;">
+        <div style="font-size: 0.75rem; text-transform: uppercase; color: var(--accent-light); margin-bottom: 6px;">
+          Resultado da variação gerada:
+        </div>
+        <div id="compare-slider-variation" class="slider-stage" style="height: 220px;">
+          <div class="slider-layer slider-layer-before">
+            <!-- Mesmo ANTES -->
+            <svg viewBox="0 0 600 380" preserveAspectRatio="none">
+              <polygon points="0,0 600,0 480,90 120,90" fill="#20252b"/>
+              <rect x="120" y="90" width="360" height="170" fill="#313740"/>
+              <polygon points="0,0 120,90 120,260 0,380" fill="#2a3038"/>
+              <polygon points="600,0 480,90 480,260 600,380" fill="#242930"/>
+              <polygon points="0,380 120,260 480,260 600,380" fill="#14171c"/>
+              <path d="M300 0 Q 302 45, 300 80" stroke="#111" stroke-width="2.5" fill="none"/>
+              <circle cx="300" cy="94" r="7" fill="#e2e8f0" opacity="0.85"/>
+            </svg>
+          </div>
+          <div id="slider-variation-after-layer" class="slider-layer slider-layer-after" style="width: 50%;">
+            <svg id="svg-variation-scene" viewBox="0 0 600 380" preserveAspectRatio="none">
+              <!-- Preenchido pelo gerador de variação -->
+            </svg>
+            <div class="slider-handle">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="15 18 9 12 15 6"></polyline></svg>
+            </div>
+          </div>
+          <!-- Overlay de estado vazio inicial -->
+          <div id="variation-empty-overlay" style="position: absolute; inset: 0; background: rgba(11, 21, 36, 0.88); z-index: 15; display: flex; flex-direction: column; align-items: center; justify-content: center; text-align: center; padding: 14px; pointer-events: none;">
+            <span style="font-size: 0.82rem; color: #CBD5E1; font-weight: 600;">Nenhuma variação gerada ainda</span>
+            <span style="font-size: 0.72rem; color: #94A3B8; margin-top: 3px;">Clique em "Gerar variação de ambiente (-2 tokens)" acima para testar.</span>
+          </div>
+        </div>
+      </div>
+
+      <div style="margin-top: 18px;">
+        <button class="btn-gold" onclick="goToScreen('op2-architect')">
+          Avançar: Ver imagem final do arquiteto →
+        </button>
+      </div>
+    </section>
+
+    <!-- OP 2: PASSO D (Visão do Arquiteto - Sem Marca d'água) -->
+    <section id="screen-op2-architect" class="screen">
+      <nav class="step-nav">
+        <button class="btn-back" onclick="goToScreen('op2-tokens')">← Voltar aos tokens</button>
+        <div class="step-dots">
+          <span class="step-dot"></span>
+          <span class="step-dot"></span>
+          <span class="step-dot"></span>
+          <span class="step-dot active"></span>
+        </div>
+      </nav>
+
+      <div class="step-box">
+        <div class="step-box-title">O que você está vendo</div>
+        <p class="step-box-desc">Imagem final sem marca d'água, pronta para apresentar ao cliente.</p>
+      </div>
+
+      <div class="lead-panel">
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px;">
+          <div>
+            <div style="font-size: 0.72rem; color: var(--accent-light); text-transform: uppercase;">Exportação em Alta Definição</div>
+            <h3 style="font-size: 1.15rem; margin: 2px 0 0;">Conceito Aprovado para Apresentação</h3>
+          </div>
+          <span class="status-pill" style="background: rgba(212, 175, 55, 0.15); border-color: var(--accent-gold); color: var(--accent-light);">Sem Marca d'água</span>
+        </div>
+
+        <!-- Preview da Imagem Final Limpa -->
+        <div style="border-radius: 8px; overflow: hidden; border: 1px solid var(--border-subtle); height: 210px; cursor: pointer; position: relative;" onclick="openLightbox(false)">
+          <div id="architect-clean-preview" style="width: 100%; height: 100%;">
+            <!-- Mesma cena sofisticada -->
+          </div>
+          <div style="position: absolute; bottom: 8px; right: 8px; background: rgba(0,0,0,0.75); border: 1px solid rgba(255,255,255,0.2); padding: 4px 8px; border-radius: 4px; font-size: 0.72rem; color: #FFF; display: flex; align-items: center; gap: 4px;">
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M15 3h6v6M9 21H3v-6M21 3l-7 7M3 21l7-7"/></svg>
+            Visualizar em Tela Cheia
+          </div>
+        </div>
+
+        <div style="margin-top: 12px; font-size: 0.82rem; color: #A4B8D3;">
+          <p style="margin: 0 0 4px;"><strong style="color:#FFF;">Resumo técnico:</strong> Sala de Estar 40m² · Iluminação 3000K quente · Marcenaria flutuante · Mobiliário neutro contemporâneo.</p>
+        </div>
+      </div>
+
+      <div style="margin-top: 20px;">
+        <button class="btn-gold" onclick="goToScreen('closing')">
+          Concluir Demonstração →
+        </button>
+      </div>
+    </section>
+
+
+    <!-- ========================================== -->
+    <!-- FECHAMENTO ENXUTO -->
+    <!-- ========================================== -->
+    <section id="screen-closing" class="screen">
+      <header class="brand-header" style="margin-bottom: 14px; padding-top: 10px;">
+        <h2 class="brand-name">PRUMO ESTRATÉGICO</h2>
+        <p style="font-size: 0.85rem; color: var(--text-muted); margin: 6px 0 0;">
+          Implantação sob medida de Inteligência Artificial para Arquitetura.
+        </p>
+      </header>
+
+      <div class="closing-grid">
+        <!-- Card Solução 1 -->
+        <div class="closing-card">
+          <div>
+            <div style="font-size: 0.72rem; color: var(--accent-light); font-weight: 700; text-transform: uppercase;">Módulo 01</div>
+            <h3 style="font-size: 1.05rem; margin-top: 4px;">Pré-atendimento inteligente</h3>
+            <p style="font-size: 0.84rem; color: #CBD5E1; margin: 4px 0 0; line-height: 1.4;">
+              Ideal para organizar e qualificar seu primeiro contato.
+            </p>
+          </div>
+          <button class="btn-outline-gold" onclick="goToScreen('op1-chat')" style="width: 100%; font-size: 0.78rem;">
+            Testar novamente Opção 1
+          </button>
+        </div>
+
+        <!-- Card Solução 2 -->
+        <div class="closing-card">
+          <div>
+            <div style="font-size: 0.72rem; color: var(--accent-light); font-weight: 700; text-transform: uppercase;">Módulo 02</div>
+            <h3 style="font-size: 1.05rem; margin-top: 4px;">IA com imagens por tokens</h3>
+            <p style="font-size: 0.84rem; color: #CBD5E1; margin: 4px 0 0; line-height: 1.4;">
+              Ideal para vender o projeto antes da obra.
+            </p>
+          </div>
+          <button class="btn-outline-gold" onclick="goToScreen('op2-chat')" style="width: 100%; font-size: 0.78rem;">
+            Testar novamente Opção 2
+          </button>
+        </div>
+      </div>
+
+      <!-- Botão Central Final -->
+      <a class="btn-gold" style="padding: 14px 20px; font-size: 1rem;" href="https://wa.me/5512981078559?text=Acessei%20o%20seu%20prot%C3%B3tipo%20e%20gostaria%20de%20algumas%20informa%C3%A7%C3%B5es" target="_blank" rel="noopener">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"></path></svg>
+        Agendar conversa com a Prumo Estratégico
+      </a>
+
+      <div style="text-align: center; margin-top: 14px;">
+        <button class="btn-back" onclick="goToScreen('home')">← Voltar ao início</button>
+      </div>
+    </section>
+
+  </div> <!-- Fim app-viewport -->
+
+
+  <!-- ========================================== -->
+  <!-- MODAIS (LIGHTBOX & DIALOGS) -->
+  <!-- ========================================== -->
+
+  <!-- Lightbox Modal (com ou sem marca d'água) -->
+  <div id="lightbox-modal" class="lightbox-modal" onclick="handleLightboxBackdrop(event)">
+    <div class="lightbox-content">
+      <button class="lightbox-close" onclick="closeLightbox()" aria-label="Fechar">✕</button>
+      <div id="watermark-el" class="watermark-overlay" style="display: none;">
+        <div class="watermark-text">PRUMO ESTRATÉGICO</div>
+      </div>
+      <div id="lightbox-render-container" style="width: 100%; height: 360px;">
+        <!-- SVGs do ambiente renderizados em tamanho ampliado -->
+      </div>
+    </div>
+  </div>
+
+  <!-- Modal Simples: Recarregar Tokens -->
+  <div id="recharge-modal" class="simple-modal" onclick="handleSimpleModalBackdrop(event, 'recharge-modal')">
+    <div class="simple-modal-box">
+      <div style="width: 44px; height: 44px; border-radius: 50%; background: rgba(212, 175, 55, 0.2); border: 1px solid var(--accent-gold); display: flex; align-items: center; justify-content: center; margin: 0 auto 12px; color: var(--accent-light);">
+        ✦
+      </div>
+      <h3 style="font-size: 1.15rem; margin-bottom: 8px;">Recarga de Tokens</h3>
+      <p style="font-size: 0.88rem; color: #CBD5E1; margin: 0 0 16px; line-height: 1.4;">
+        A recarga é feita com a Prumo Estratégico.
+      </p>
+      <div style="display: flex; flex-direction: column; gap: 8px;">
+        <a class="btn-gold" href="https://wa.me/5512981078559?text=Acessei%20o%20seu%20prot%C3%B3tipo%20e%20gostaria%20de%20algumas%20informa%C3%A7%C3%B5es" target="_blank" rel="noopener" onclick="closeModal('recharge-modal')">
+          Falar com a equipe no WhatsApp
+        </a>
+        <button class="btn-back" onclick="closeModal('recharge-modal')" style="justify-content: center;">
+          Fechar
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Modal de Agendamento Final -->
+  <div id="contact-modal" class="simple-modal" onclick="handleSimpleModalBackdrop(event, 'contact-modal')">
+    <div class="simple-modal-box">
+      <div style="width: 44px; height: 44px; border-radius: 50%; background: rgba(212, 175, 55, 0.2); border: 1px solid var(--accent-gold); display: flex; align-items: center; justify-content: center; margin: 0 auto 12px; color: var(--accent-light); font-size: 1.2rem;">
+        ✦
+      </div>
+      <h3 style="font-size: 1.2rem; margin-bottom: 6px;">Prumo Estratégico</h3>
+      <p style="font-size: 0.86rem; color: #CBD5E1; margin: 0 0 16px; line-height: 1.4;">
+        Vamos desenhar a implantação de IA ideal para o posicionamento e escala do seu escritório.
+      </p>
+      <div style="display: flex; flex-direction: column; gap: 8px;">
+        <a class="btn-gold" href="https://wa.me/5512981078559?text=Acessei%20o%20seu%20prot%C3%B3tipo%20e%20gostaria%20de%20algumas%20informa%C3%A7%C3%B5es" target="_blank" rel="noopener" onclick="closeModal('contact-modal')">
+          Iniciar conversa direta no WhatsApp
+        </a>
+        <button class="btn-back" onclick="closeModal('contact-modal')" style="justify-content: center;">
+          Fechar
+        </button>
+      </div>
+    </div>
+  </div>
+
+
+  <!-- ========================================== -->
+  <!-- JAVASCRIPT AUTO-CONTIDO (ESTADO E LÓGICA) -->
+  <!-- ========================================== -->
+  <script>
+    /* ----------------------------------------------------
+       LIMPEZA RIGOROSA DE PERSISTÊNCIA NA INICIALIZAÇÃO
+       Nenhum dado é salvo entre sessões/reloads.
+    ---------------------------------------------------- */
+    (function purgeStorage() {
+      try {
+        localStorage.clear();
+      } catch (e) {}
+      try {
+        sessionStorage.clear();
+      } catch (e) {}
+    })();
+
+    /* ----------------------------------------------------
+       ESTADO TOTALMENTE EM MEMÓRIA VOLÁTIL (ZERA NO RELOAD)
+    ---------------------------------------------------- */
+    function getFreshInitialState() {
+      return {
+        currentScreen: 'home',
+        op1Step: 0,
+        op1Completed: false,
+        op1Protocol: null,
+        op1Answers: {
+          tipo: '',
+          ambientes: '',
+          estilo: '',
+          metragem: '',
+          regiao: '',
+          investimento: '',
+          prazo: '',
+          desejos: ''
+        },
+        op2ChatDone: false,
+        tokens: 10,
+        variationGenerated: false,
+        activeVariationIndex: -1,
+        variations: [
+          {
+            name: 'Contemporâneo Warm',
+            wallColor: '#2a3f5f',
+            accentColor: '#D4AF37',
+            sofaColor: '#E5DDD0',
+            woodColor: '#4a3520'
+          },
+          {
+            name: 'Minimalista Japandi',
+            wallColor: '#28312e',
+            accentColor: '#BCA888',
+            sofaColor: '#DFDACF',
+            woodColor: '#5c4b37'
+          },
+          {
+            name: 'Industrial Chic',
+            wallColor: '#242930',
+            accentColor: '#C4773B',
+            sofaColor: '#3A424F',
+            woodColor: '#2B231D'
+          }
+        ]
+      };
+    }
+
+    let state = getFreshInitialState();
+
+    /* ----------------------------------------------------
+       ROTEAMENTO E NAVEGAÇÃO ENTRE TELAS
+    ---------------------------------------------------- */
+    function goToScreen(screenId) {
+      const screens = document.querySelectorAll('.screen');
+      screens.forEach(s => s.classList.remove('active'));
+
+      const target = document.getElementById(`screen-${screenId}`);
+      if (target) {
+        target.classList.add('active');
+        state.currentScreen = screenId;
+        window.scrollTo({ top: 0, behavior: 'smooth' });
+
+        // Inicialização específica da tela acessada
+        if (screenId === 'op1-chat' && state.op1Step === 0 && !state.op1Completed) {
+          initOp1Chat();
+        }
+        if (screenId === 'op2-chat' && !state.op2ChatDone) {
+          initOp2Chat();
+        }
+        if (screenId === 'op2-slider') {
+          initSlider('compare-slider', 'slider-after-layer');
+        }
+        if (screenId === 'op2-tokens') {
+          initSlider('compare-slider-variation', 'slider-variation-after-layer');
+          if (state.variationGenerated) {
+            renderVariationScene();
+          }
+        }
+        if (screenId === 'op2-architect') {
+          renderCleanArchitectPreview();
+        }
+      }
+    }
+
+    /* ----------------------------------------------------
+       OPÇÃO 1: CHAT INTERATIVO SIMULADO
+    ---------------------------------------------------- */
+    const op1Script = [
+      {
+        question: "Olá! Seja muito bem-vindo ao nosso atendimento de arquitetura. Para começarmos, qual é o tipo de projeto que você deseja realizar?",
+        key: "tipo",
+        chips: ["Residencial Novo", "Reforma de Apartamento", "Comercial / Escritório"]
+      },
+      {
+        question: "Excelente escolha. Quais são os principais ambientes que você deseja transformar ou construir?",
+        key: "ambientes",
+        chips: ["Living integrado e Cozinha", "Suíte Master + Closet", "Casa completa", "Área Gourmet"]
+      },
+      {
+        question: "Maravilhoso. Qual estilo visual mais se aproxima do seu gosto pessoal?",
+        key: "estilo",
+        chips: ["Contemporâneo", "Clássico Sofisticado", "Minimalista", "Industrial Elegante"]
+      },
+      {
+        question: "Qual é a metragem aproximada do imóvel ou dos ambientes?",
+        key: "metragem",
+        chips: ["Até 90 m²", "~140 m²", "200 a 350 m²", "Mais de 400 m²"]
+      },
+      {
+        question: "Em qual cidade ou região/bairro o imóvel está localizado?",
+        key: "regiao",
+        chips: ["Jardins / SP", "Moema / SP", "Barra / RJ", "Lourdes / BH"]
+      },
+      {
+        question: "Para dimensionarmos os acabamentos com precisão, qual a faixa de investimento pretendida?",
+        key: "investimento",
+        chips: ["Alto Padrão", "Médio-Alto Padrão", "Premium / Sem limite rígido"]
+      },
+      {
+        question: "Qual é o prazo desejado para início ou conclusão da obra?",
+        key: "prazo",
+        chips: ["Imediato (em 30 dias)", "Em 60 a 90 dias", "Planejamento para o próximo ano"]
+      },
+      {
+        question: "Perfeito! Há algum desejo especial (ex: adega climatizada, automação total, iluminação cênica, lareira ecológica)?",
+        key: "desejos",
+        chips: ["Luz natural ampla e marcenaria refinada", "Automação total e home theater", "Adega e espaço gourmet integrado"]
+      }
+    ];
+
+    function initOp1Chat() {
+      const container = document.getElementById('op1-chat-messages');
+      container.innerHTML = '';
+      state.op1Step = 0;
+      askNextOp1Question();
+    }
+
+    function askNextOp1Question() {
+      const container = document.getElementById('op1-chat-messages');
+      const stepData = op1Script[state.op1Step];
+      if (!stepData) return;
+
+      // Typing indicator
+      const typing = document.createElement('div');
+      typing.className = 'typing-indicator';
+      typing.id = 'op1-typing';
+      typing.innerHTML = '<span></span><span></span><span></span>';
+      container.appendChild(typing);
+      container.scrollTop = container.scrollHeight;
+
+      setTimeout(() => {
+        const typingEl = document.getElementById('op1-typing');
+        if (typingEl) typingEl.remove();
+
+        const bubble = document.createElement('div');
+        bubble.className = 'bubble bubble-ia';
+        bubble.innerText = stepData.question;
+        container.appendChild(bubble);
+        container.scrollTop = container.scrollHeight;
+
+        // Renderiza chips rápidos
+        renderOp1Chips(stepData.chips);
+      }, 420);
+    }
+
+    function renderOp1Chips(chips) {
+      const chipsContainer = document.getElementById('op1-quick-chips');
+      chipsContainer.innerHTML = '';
+      chips.forEach(chipText => {
+        const btn = document.createElement('button');
+        btn.type = 'button';
+        btn.className = 'quick-chip';
+        btn.innerText = chipText;
+        btn.onclick = () => handleOp1Answer(chipText);
+        chipsContainer.appendChild(btn);
+      });
+    }
+
+    function handleOp1Answer(answerText) {
+      if (!answerText.trim()) return;
+
+      const currentData = op1Script[state.op1Step];
+      if (currentData) {
+        state.op1Answers[currentData.key] = answerText;
+      }
+
+      // Mensagem do usuário
+      const container = document.getElementById('op1-chat-messages');
+      const userBubble = document.createElement('div');
+      userBubble.className = 'bubble bubble-user';
+      userBubble.innerText = answerText;
+      container.appendChild(userBubble);
+      container.scrollTop = container.scrollHeight;
+
+      // Limpar input e chips
+      document.getElementById('op1-user-input').value = '';
+      document.getElementById('op1-quick-chips').innerHTML = '';
+
+      state.op1Step++;
+
+      if (state.op1Step < op1Script.length) {
+        setTimeout(askNextOp1Question, 280);
+      } else {
+        // Chat finalizado: gera protocolo e libera dossiê estruturado
+        state.op1Completed = true;
+        state.op1Protocol = 'PRU-' + Math.floor(1000 + Math.random() * 9000);
+
+        setTimeout(() => {
+          const finalBubble = document.createElement('div');
+          finalBubble.className = 'bubble bubble-ia';
+          finalBubble.innerHTML = "<strong>Perfeito!</strong> Todas as suas respostas foram computadas e seu dossiê estruturado já está pronto para o arquiteto.";
+          container.appendChild(finalBubble);
+
+          const ctaBtn = document.createElement('button');
+          ctaBtn.className = 'btn-gold';
+          ctaBtn.style.marginTop = '10px';
+          ctaBtn.innerText = 'Ver Ficha de Pré-Atendimento Estruturada →';
+          ctaBtn.onclick = () => {
+            updateDossierData();
+            goToScreen('op1-dossier');
+          };
+          container.appendChild(ctaBtn);
+          container.scrollTop = container.scrollHeight;
+        }, 450);
+      }
+    }
+
+    function handleOp1InputSubmit(e) {
+      e.preventDefault();
+      const input = document.getElementById('op1-user-input');
+      if (input.value.trim()) {
+        handleOp1Answer(input.value.trim());
+      }
+    }
+
+    function updateDossierData() {
+      if (!state.op1Completed) return;
+
+      // Atualiza cabeçalho do dossiê
+      const badge = document.getElementById('dossier-badge-status');
+      badge.style.background = 'rgba(34, 197, 94, 0.12)';
+      badge.style.borderColor = 'rgba(34, 197, 94, 0.4)';
+      badge.style.color = '#4ade80';
+      badge.innerText = '● Salvo no banco de dados';
+
+      document.getElementById('op1-protocol-tag').innerText = `Protocolo #${state.op1Protocol}`;
+
+      // Atualiza campos do dossiê
+      const mapKeys = [
+        ['dos-tipo', state.op1Answers.tipo],
+        ['dos-ambientes', state.op1Answers.ambientes],
+        ['dos-estilo', state.op1Answers.estilo],
+        ['dos-metragem', state.op1Answers.metragem],
+        ['dos-regiao', state.op1Answers.regiao],
+        ['dos-investimento', state.op1Answers.investimento],
+        ['dos-prazo', state.op1Answers.prazo],
+        ['dos-desejos', state.op1Answers.desejos]
+      ];
+
+      mapKeys.forEach(([id, val]) => {
+        const el = document.getElementById(id);
+        if (el) {
+          el.innerText = val || 'Não informado';
+          el.style.color = '#FFF';
+          el.style.fontWeight = '600';
+        }
+      });
+
+      // Atualiza mock do WhatsApp com as informações reais coletadas
+      const waBody = document.getElementById('wa-body');
+      waBody.innerHTML = `
+        <div class="wa-bubble-system">
+          Olá! Aqui está o resumo do que você nos contou sobre o seu projeto:
+          <br><br>
+          • <strong>Projeto:</strong> ${escapeHtml(state.op1Answers.tipo || 'Residencial')}<br>
+          • <strong>Estilo:</strong> ${escapeHtml(state.op1Answers.estilo || 'Contemporâneo')}<br>
+          • <strong>Área:</strong> ${escapeHtml(state.op1Answers.metragem || 'A definir')}<br>
+          • <strong>Região:</strong> ${escapeHtml(state.op1Answers.regiao || 'A definir')}
+          <br><br>
+          Podemos confirmar esses detalhes para o arquiteto preparar seu atendimento?
+          <div style="text-align: right; font-size: 0.65rem; color: #8696a0; margin-top: 4px;">
+            10:42 <span class="wa-status-check">✓✓</span>
+          </div>
+        </div>
+
+        <div class="wa-bubble-client">
+          Tudo certo! As informações estão exatas, fico no aguardo do contato.
+          <div style="text-align: right; font-size: 0.65rem; color: #8696a0; margin-top: 4px;">10:43</div>
+        </div>
+
+        <div class="wa-bubble-system">
+          Perfeito! O arquiteto responsável já recebeu sua ficha validada e entrará em contato em breve. Tenha um ótimo dia!
+          <div style="text-align: right; font-size: 0.65rem; color: #8696a0; margin-top: 4px;">
+            10:43 <span class="wa-status-check">✓✓</span>
+          </div>
+        </div>
+      `;
+
+      // Atualiza o painel do arquiteto
+      const leadStage = document.getElementById('lead-stage-label');
+      const leadName = document.getElementById('lead-client-name');
+      const leadPill = document.getElementById('lead-status-pill');
+      const leadScope = document.getElementById('lead-summary-scope');
+      const leadStatus = document.getElementById('lead-summary-status');
+
+      if (leadStage) leadStage.innerText = 'Lead Confirmado';
+      if (leadStage) leadStage.style.color = 'var(--accent-light)';
+      if (leadName) leadName.innerText = 'Dra. Mariana Fontes';
+      if (leadPill) {
+        leadPill.innerText = 'Pronto para contato';
+        leadPill.style.background = 'rgba(34, 197, 94, 0.18)';
+        leadPill.style.borderColor = 'rgba(34, 197, 94, 0.5)';
+        leadPill.style.color = '#86efac';
+      }
+      if (leadScope) {
+        leadScope.innerHTML = `<strong style="color: #FFF;">Escopo Validado:</strong> ${escapeHtml(state.op1Answers.tipo)} · ${escapeHtml(state.op1Answers.metragem)} · ${escapeHtml(state.op1Answers.regiao)}.`;
+      }
+      if (leadStatus) {
+        leadStatus.innerHTML = `<strong style="color: #FFF;">Status de Validação:</strong> Confirmado via WhatsApp às 10:43 (Protocolo #${state.op1Protocol}).`;
+      }
+    }
+
+    function escapeHtml(str) {
+      if (!str) return '';
+      return String(str)
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#39;');
+    }
+
+    function showLeadSuccess() {
+      if (!state.op1Completed) {
+        alert("Nenhum lead preenchido ainda. Complete o pré-atendimento no Passo 1 primeiro.");
+        return;
+      }
+      alert("Ação Simulada: O arquiteto abre diretamente a conversa com Mariana Fontes já com a ficha e o histórico validado no WhatsApp.");
+    }
+
+
+    /* ----------------------------------------------------
+       OPÇÃO 2: CHAT CURTO E GERAÇÃO CONCEITUAL
+    ---------------------------------------------------- */
+    function initOp2Chat() {
+      state.op2ChatDone = true;
+      const container = document.getElementById('op2-chat-messages');
+      container.innerHTML = '';
+
+      const msgs = [
+        "Olá! Entendi os parâmetros do seu projeto: Sala de estar, 40m², tons claros, marcenaria flutuante e iluminação quente de 3000K.",
+        "Processando o modelo volumétrico do espaço cru...",
+        "Vou gerar a pré-visualização fotorrealista do seu ambiente agora."
+      ];
+
+      msgs.forEach((msg, idx) => {
+        setTimeout(() => {
+          const bubble = document.createElement('div');
+          bubble.className = 'bubble bubble-ia';
+          bubble.innerText = msg;
+          container.appendChild(bubble);
+          container.scrollTop = container.scrollHeight;
+        }, (idx + 1) * 380);
+      });
+    }
+
+
+    /* ----------------------------------------------------
+       SLIDER DE ANTES / DEPOIS (DRAG TOUCH & MOUSE)
+    ---------------------------------------------------- */
+    function initSlider(containerId, afterLayerId) {
+      const container = document.getElementById(containerId);
+      const afterLayer = document.getElementById(afterLayerId);
+      if (!container || !afterLayer) return;
+
+      // Reseta para 50% de abertura padrão
+      afterLayer.style.width = '50%';
+
+      let isDragging = false;
+
+      function updateSliderPosition(clientX) {
+        const rect = container.getBoundingClientRect();
+        let offsetX = clientX - rect.left;
+        if (offsetX < 0) offsetX = 0;
+        if (offsetX > rect.width) offsetX = rect.width;
+        const pct = (offsetX / rect.width) * 100;
+        afterLayer.style.width = `${pct}%`;
+      }
+
+      function onPointerDown(e) {
+        isDragging = true;
+        updateSliderPosition(e.clientX || (e.touches && e.touches[0].clientX));
+      }
+
+      function onPointerMove(e) {
+        if (!isDragging) return;
+        updateSliderPosition(e.clientX || (e.touches && e.touches[0].clientX));
+      }
+
+      function onPointerUp() {
+        isDragging = false;
+      }
+
+      // Evita acumular ouvintes múltiplos
+      container.onpointerdown = onPointerDown;
+      window.onpointermove = onPointerMove;
+      window.onpointerup = onPointerUp;
+
+      container.ontouchstart = onPointerDown;
+      window.ontouchmove = onPointerMove;
+      window.ontouchend = onPointerUp;
+    }
+
+
+    /* ----------------------------------------------------
+       SISTEMA DE TOKENS E VARIAÇÕES
+    ---------------------------------------------------- */
+    function generateVariation() {
+      if (state.tokens < 2) {
+        openRechargeModal();
+        return;
+      }
+
+      // Dedução e animação
+      state.tokens -= 2;
+      state.variationGenerated = true;
+
+      const tokenNumEl = document.getElementById('token-num');
+      const tokenValEl = document.getElementById('token-val');
+
+      tokenValEl.classList.add('deduct');
+      setTimeout(() => tokenValEl.classList.remove('deduct'), 350);
+      tokenNumEl.innerText = state.tokens;
+
+      // Alerta de saldo baixo
+      const lowWarning = document.getElementById('token-low-warning');
+      if (state.tokens <= 4) {
+        lowWarning.style.display = 'block';
+      }
+
+      // Altera variação
+      state.activeVariationIndex = (state.activeVariationIndex + 1) % state.variations.length;
+      const variation = state.variations[state.activeVariationIndex];
+
+      document.getElementById('style-name-badge').innerText = variation.name;
+
+      // Esconde o overlay de vazio e renderiza cena
+      const emptyOverlay = document.getElementById('variation-empty-overlay');
+      if (emptyOverlay) {
+        emptyOverlay.style.display = 'none';
+      }
+      renderVariationScene();
+    }
+
+    function renderVariationScene() {
+      if (!state.variationGenerated || state.activeVariationIndex < 0) return;
+
+      const varSvg = document.getElementById('svg-variation-scene');
+      if (!varSvg) return;
+      const current = state.variations[state.activeVariationIndex];
+
+      varSvg.innerHTML = `
+        <defs>
+          <linearGradient id="vWall" x1="0" y1="0" x2="1" y2="0">
+            <stop offset="0%" stop-color="#141E2E"/>
+            <stop offset="100%" stop-color="${current.wallColor}"/>
+          </linearGradient>
+        </defs>
+        <polygon points="0,0 600,0 480,90 120,90" fill="#182333"/>
+        <line x1="120" y1="90" x2="480" y2="90" stroke="${current.accentColor}" stroke-width="2" opacity="0.8"/>
+        <rect x="120" y="90" width="360" height="170" fill="url(#vWall)"/>
+        <rect x="190" y="115" width="120" height="70" fill="#101721" stroke="${current.accentColor}" stroke-width="2"/>
+        <circle cx="250" cy="150" r="14" fill="${current.accentColor}" opacity="0.7"/>
+        <polygon points="0,0 120,90 120,260 0,380" fill="#182536"/>
+        <polygon points="600,0 480,90 480,260 600,380" fill="#1b2a3d"/>
+        <polygon points="0,380 120,260 480,260 600,380" fill="${current.woodColor}"/>
+        <polygon points="120,365 190,275 420,275 490,365" fill="#EAE5DC" opacity="0.8"/>
+        <!-- Sofá de cor customizada -->
+        <rect x="170" y="260" width="220" height="40" rx="8" fill="${current.sofaColor}"/>
+        <rect x="185" y="240" width="190" height="26" rx="6" fill="${current.sofaColor}" opacity="0.9"/>
+        <ellipse cx="280" cy="330" rx="50" ry="14" fill="#FAF7F2" stroke="${current.accentColor}" stroke-width="1.5"/>
+        <path d="M420 330 Q 440 180, 360 170" stroke="${current.accentColor}" stroke-width="2.5" fill="none"/>
+        <circle cx="360" cy="175" r="10" fill="${current.accentColor}"/>
+      `;
+    }
+
+    function renderCleanArchitectPreview() {
+      const container = document.getElementById('architect-clean-preview');
+      const originalSvg = document.getElementById('svg-after-scene');
+      if (container && originalSvg) {
+        container.innerHTML = originalSvg.outerHTML;
+      }
+    }
+
+
+    /* ----------------------------------------------------
+       LIGHTBOX COM OU SEM MARCA D'ÁGUA
+    ---------------------------------------------------- */
+    function openLightbox(withWatermark) {
+      const modal = document.getElementById('lightbox-modal');
+      const watermark = document.getElementById('watermark-el');
+      const renderContainer = document.getElementById('lightbox-render-container');
+      const sourceSvg = document.getElementById('svg-after-scene');
+
+      if (!modal || !sourceSvg) return;
+
+      watermark.style.display = withWatermark ? 'flex' : 'none';
+      renderContainer.innerHTML = sourceSvg.outerHTML;
+      modal.classList.add('active');
+    }
+
+    function closeLightbox() {
+      const modal = document.getElementById('lightbox-modal');
+      if (modal) modal.classList.remove('active');
+    }
+
+    function handleLightboxBackdrop(e) {
+      if (e.target.id === 'lightbox-modal') {
+        closeLightbox();
+      }
+    }
+
+
+    /* ----------------------------------------------------
+       MODAIS SIMPLES
+    ---------------------------------------------------- */
+    function openRechargeModal() {
+      document.getElementById('recharge-modal').classList.add('active');
+    }
+
+    function openContactModal() {
+      document.getElementById('contact-modal').classList.add('active');
+    }
+
+    function closeModal(modalId) {
+      document.getElementById(modalId).classList.remove('active');
+    }
+
+    function handleSimpleModalBackdrop(e, modalId) {
+      if (e.target.id === modalId) {
+        closeModal(modalId);
+      }
+    }
+
+    /* ----------------------------------------------------
+       RESET COMPLETO NO CARREGAMENTO DA PÁGINA
+    ---------------------------------------------------- */
+    function resetEntirePrototypeToBlank() {
+      // 1. Limpa storage local e de sessão
+      try {
+        localStorage.clear();
+      } catch (e) {}
+      try {
+        sessionStorage.clear();
+      } catch (e) {}
+
+      // 2. Reinicia o estado em memória
+      state = getFreshInitialState();
+
+      // 3. Reseta UI do Chat 1
+      const op1Container = document.getElementById('op1-chat-messages');
+      if (op1Container) op1Container.innerHTML = '';
+      const op1Chips = document.getElementById('op1-quick-chips');
+      if (op1Chips) op1Chips.innerHTML = '';
+      const op1Input = document.getElementById('op1-user-input');
+      if (op1Input) op1Input.value = '';
+
+      // 4. Reseta UI da Ficha de Pré-Atendimento (dossiê em branco)
+      const badge = document.getElementById('dossier-badge-status');
+      if (badge) {
+        badge.style.background = 'rgba(148, 163, 184, 0.12)';
+        badge.style.borderColor = 'rgba(148, 163, 184, 0.3)';
+        badge.style.color = '#94A3B8';
+        badge.innerText = '○ Aguardando respostas';
+      }
+      const protoTag = document.getElementById('op1-protocol-tag');
+      if (protoTag) protoTag.innerText = 'Protocolo: Não gerado';
+
+      const fieldIds = ['dos-tipo', 'dos-ambientes', 'dos-estilo', 'dos-metragem', 'dos-regiao', 'dos-investimento', 'dos-prazo', 'dos-desejos'];
+      fieldIds.forEach(id => {
+        const el = document.getElementById(id);
+        if (el) {
+          el.innerText = '—';
+          el.style.color = 'var(--text-muted)';
+          el.style.fontWeight = '400';
+        }
+      });
+
+      // 5. Reseta mock do WhatsApp (vazio)
+      const waBody = document.getElementById('wa-body');
+      if (waBody) {
+        waBody.innerHTML = `
+          <div id="wa-empty-hint" style="text-align: center; margin: auto; color: #8696a0; font-size: 0.82rem; padding: 24px 14px; line-height: 1.4;">
+            Nenhuma mensagem registrada.<br>
+            Conclua as perguntas no chat para gerar a validação automática pelo WhatsApp.
+          </div>
+        `;
+      }
+
+      // 6. Reseta painel do Arquiteto (pendente)
+      const leadStage = document.getElementById('lead-stage-label');
+      const leadName = document.getElementById('lead-client-name');
+      const leadPill = document.getElementById('lead-status-pill');
+      const leadScope = document.getElementById('lead-summary-scope');
+      const leadStatus = document.getElementById('lead-summary-status');
+
+      if (leadStage) {
+        leadStage.innerText = 'Aguardando Lead';
+        leadStage.style.color = 'var(--text-muted)';
+      }
+      if (leadName) leadName.innerText = '—';
+      if (leadPill) {
+        leadPill.innerText = 'Pendente';
+        leadPill.style.background = 'rgba(148, 163, 184, 0.15)';
+        leadPill.style.borderColor = 'rgba(148, 163, 184, 0.3)';
+        leadPill.style.color = '#94A3B8';
+      }
+      if (leadScope) {
+        leadScope.innerHTML = '<strong style="color: #FFF;">Escopo Validado:</strong> Formulário ainda não preenchido.';
+      }
+      if (leadStatus) {
+        leadStatus.innerHTML = '<strong style="color: #FFF;">Status de Validação:</strong> Aguardando conclusão do pré-atendimento.';
+      }
+
+      // 7. Reseta Chat 2
+      const op2Container = document.getElementById('op2-chat-messages');
+      if (op2Container) op2Container.innerHTML = '';
+
+      // 8. Reseta Saldo de Tokens para 10
+      const tokenNum = document.getElementById('token-num');
+      if (tokenNum) tokenNum.innerText = '10';
+      const lowWarning = document.getElementById('token-low-warning');
+      if (lowWarning) lowWarning.style.display = 'none';
+      const styleBadge = document.getElementById('style-name-badge');
+      if (styleBadge) styleBadge.innerText = 'Nenhuma variação gerada';
+
+      // 9. Reseta Sliders para a posição inicial (50%)
+      const sliderAfter1 = document.getElementById('slider-after-layer');
+      if (sliderAfter1) sliderAfter1.style.width = '50%';
+      const sliderAfter2 = document.getElementById('slider-variation-after-layer');
+      if (sliderAfter2) sliderAfter2.style.width = '50%';
+
+      // 10. Reseta preview da variação
+      const varSvg = document.getElementById('svg-variation-scene');
+      if (varSvg) varSvg.innerHTML = '';
+      const emptyOverlay = document.getElementById('variation-empty-overlay');
+      if (emptyOverlay) emptyOverlay.style.display = 'flex';
+
+      // 11. Começa na tela inicial
+      goToScreen('home');
+    }
+
+    // Inicialização ao carregar o DOM ou evento de load
+    window.addEventListener('DOMContentLoaded', resetEntirePrototypeToBlank);
+    window.addEventListener('pageshow', (event) => {
+      // Trata cache de navegação (bfcache) de abas em navegadores mobile/safari
+      if (event.persisted) {
+        resetEntirePrototypeToBlank();
+      }
+    });
+  </script>
+<script>
+/* Skip artifact shell — fixed helpers served beside every artifact. */
+(function () {
+  "use strict";
+
+  var fmt = {
+    num: function (v, opts) { return new Intl.NumberFormat("pt-BR", opts || {}).format(v); },
+    brl: function (v) { return new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(v); },
+    pct: function (v) { return new Intl.NumberFormat("pt-BR", { style: "percent", maximumFractionDigits: 1 }).format(v); }
+  };
+
+  // axisFmt keeps axis tick labels short (compact notation) so long values
+  // (e.g. full BRL amounts) never clip against the plot edge.
+  function axisFmt(v) {
+    return fmt.num(v, { notation: "compact", maximumFractionDigits: 1 });
+  }
+
+  // format accepts a function OR one of the fmt names ("num" | "brl" | "pct").
+  function coerceFormat(spec) {
+    if (typeof spec === "function") return spec;
+    if (typeof spec === "string" && fmt[spec]) return fmt[spec];
+    return function (v) { return fmt.num(v); };
+  }
+
+  function accent() {
+    return getComputedStyle(document.documentElement).getPropertyValue("--accent").trim() || "#2563eb";
+  }
+  function mutedColor() {
+    return getComputedStyle(document.documentElement).getPropertyValue("--text-muted").trim() || "#5b6472";
+  }
+  function svgEl(tag, attrs) {
+    var el = document.createElementNS("http://www.w3.org/2000/svg", tag);
+    for (var k in attrs) el.setAttribute(k, attrs[k]);
+    return el;
+  }
+  function frame(el, w, h) {
+    var svg = svgEl("svg", { viewBox: "0 0 " + w + " " + h, role: "img" });
+    el.innerHTML = "";
+    el.appendChild(svg);
+    return svg;
+  }
+
+  // maxOf guards the axis scale: empty values would give -Infinity (truthy,
+  // so "|| 1" can't catch it) and a non-positive max would flip the chart.
+  function maxOf(values) {
+    var m = values.length ? Math.max.apply(null, values) : 0;
+    return m > 0 ? m : 1;
+  }
+
+  // bar(el, {labels:[], values:[], color?, format?}) — vertical bar chart.
+  function bar(el, cfg) {
+    var W = 640, H = 280, padL = 46, padB = 30, padT = 12;
+    var svg = frame(el, W, H);
+    var max = maxOf(cfg.values);
+    var n = cfg.values.length;
+    var plotW = W - padL - 12, plotH = H - padT - padB;
+    var step = plotW / n, bw = Math.min(step * 0.62, 64);
+    var color = cfg.color || accent();
+    var f = coerceFormat(cfg.format);
+    for (var g = 0; g <= 4; g++) {
+      var gy = padT + plotH - (plotH * g) / 4;
+      svg.appendChild(svgEl("line", { x1: padL, y1: gy, x2: W - 12, y2: gy, stroke: "currentColor", "stroke-opacity": 0.08 }));
+      var lbl = svgEl("text", { x: padL - 8, y: gy + 4, "text-anchor": "end", "font-size": 10, fill: mutedColor() });
+      lbl.textContent = axisFmt((max * g) / 4);
+      svg.appendChild(lbl);
+    }
+    cfg.values.forEach(function (v, i) {
+      var bh = Math.max(0, (v / max) * plotH);
+      var x = padL + i * step + (step - bw) / 2;
+      var y = padT + plotH - bh;
+      var r = svgEl("rect", { x: x, y: y, width: bw, height: bh, rx: 4, fill: color });
+      var t = svgEl("title", {});
+      t.textContent = cfg.labels[i] + ": " + f(v);
+      r.appendChild(t);
+      svg.appendChild(r);
+      var tx = svgEl("text", { x: x + bw / 2, y: H - 10, "text-anchor": "middle", "font-size": 11, fill: mutedColor() });
+      tx.textContent = cfg.labels[i];
+      svg.appendChild(tx);
+    });
+  }
+
+  // line(el, {labels:[], values:[], color?, format?}) — single-series line.
+  function line(el, cfg) {
+    var W = 640, H = 280, padL = 46, padB = 30, padT = 12;
+    var svg = frame(el, W, H);
+    var max = maxOf(cfg.values);
+    var n = cfg.values.length;
+    var plotW = W - padL - 16, plotH = H - padT - padB;
+    var color = cfg.color || accent();
+    var f = coerceFormat(cfg.format);
+    for (var g = 0; g <= 4; g++) {
+      var gy = padT + plotH - (plotH * g) / 4;
+      svg.appendChild(svgEl("line", { x1: padL, y1: gy, x2: W - 16, y2: gy, stroke: "currentColor", "stroke-opacity": 0.08 }));
+      var lbl = svgEl("text", { x: padL - 8, y: gy + 4, "text-anchor": "end", "font-size": 10, fill: mutedColor() });
+      lbl.textContent = axisFmt((max * g) / 4);
+      svg.appendChild(lbl);
+    }
+    var pts = cfg.values.map(function (v, i) {
+      var x = padL + (n === 1 ? plotW / 2 : (plotW * i) / (n - 1));
+      var y = padT + plotH - (v / max) * plotH;
+      return [x, y];
+    });
+    var d = pts.map(function (p, i) { return (i ? "L" : "M") + p[0].toFixed(1) + " " + p[1].toFixed(1); }).join(" ");
+    svg.appendChild(svgEl("path", { d: d, fill: "none", stroke: color, "stroke-width": 2, "stroke-linejoin": "round" }));
+    pts.forEach(function (p, i) {
+      var c = svgEl("circle", { cx: p[0], cy: p[1], r: 3.5, fill: color });
+      var t = svgEl("title", {});
+      t.textContent = cfg.labels[i] + ": " + f(cfg.values[i]);
+      c.appendChild(t);
+      svg.appendChild(c);
+      var tx = svgEl("text", { x: p[0], y: H - 10, "text-anchor": "middle", "font-size": 11, fill: mutedColor() });
+      tx.textContent = cfg.labels[i];
+      svg.appendChild(tx);
+    });
+  }
+
+  // donut(el, {labels:[], values:[], colors?}) — donut with center total.
+  function donut(el, cfg) {
+    var W = 320, H = 280, cx = W / 2, cy = H / 2, R = 92, r = 58;
+    var svg = frame(el, W, H);
+    var total = cfg.values.reduce(function (a, b) { return a + b; }, 0) || 1;
+    var palette = cfg.colors || [accent(), "#1baf7a", "#eda100", "#e34948", "#4a3aa7", "#e87ba4"];
+    var a0 = -Math.PI / 2;
+    cfg.values.forEach(function (v, i) {
+      var a1 = a0 + (v / total) * Math.PI * 2;
+      var large = a1 - a0 > Math.PI ? 1 : 0;
+      var p = ["M", cx + R * Math.cos(a0), cy + R * Math.sin(a0),
+        "A", R, R, 0, large, 1, cx + R * Math.cos(a1), cy + R * Math.sin(a1),
+        "L", cx + r * Math.cos(a1), cy + r * Math.sin(a1),
+        "A", r, r, 0, large, 0, cx + r * Math.cos(a0), cy + r * Math.sin(a0), "Z"].join(" ");
+      var path = svgEl("path", { d: p, fill: palette[i % palette.length] });
+      var t = svgEl("title", {});
+      t.textContent = cfg.labels[i] + ": " + fmt.num(v) + " (" + fmt.pct(v / total) + ")";
+      path.appendChild(t);
+      svg.appendChild(path);
+      a0 = a1;
+    });
+    var center = svgEl("text", { x: cx, y: cy + 5, "text-anchor": "middle", "font-size": 20, "font-weight": 650, fill: "currentColor" });
+    center.textContent = fmt.num(total);
+    svg.appendChild(center);
+  }
+
+  window.skipShell = { fmt: fmt };
+  window.skipChart = { bar: bar, line: line, donut: donut };
+})();
+
+</script>
+</body>
+</html>
